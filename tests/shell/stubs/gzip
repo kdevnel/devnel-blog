@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+# Stub gzip: the real one, except STUB_GZIP_CORRUPT=1 truncates compressed output.
+if [[ "${STUB_GZIP_CORRUPT:-}" == 1 && "$*" == "-c" ]]; then
+  "${REAL_GZIP:?}" -c | head -c 25
+  exit 0
+fi
+exec "${REAL_GZIP:?}" "$@"

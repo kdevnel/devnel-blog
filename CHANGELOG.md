@@ -12,3 +12,9 @@ All notable changes to the devNel theme and tooling are recorded here. The forma
   `functions.php` loading `inc/*.php`), npm and Composer tooling, phpcs (WPCS, PHPCompatibilityWP
   8.4), PHPStan level 6, ESLint, stylelint, Prettier, shellcheck and Bats, GitHub Actions CI and
   Dependabot. `npm run check` runs everything.
+- Backups (#18): `scripts/backup/backup.sh` (daily verified DB dump, weekly wp-content + nginx
+  config, atomic writes, disk guard, local and off-site retention, encrypted off-site copy via
+  rclone crypt, Healthchecks heartbeat and failure email) and `scripts/backup/restore-test.sh`
+  (weekly automated restore into a scratch database with a restricted MySQL user, compared against
+  production, with its own disk guard). Runbooks for install, restore and cleanup in
+  `docs/runbooks/`.

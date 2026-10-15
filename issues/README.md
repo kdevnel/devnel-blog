@@ -29,7 +29,10 @@ One file per issue. The team lead keeps the **Status** column current (`todo` â†
 
 ## Pending human-gated steps
 
-_None yet. The lead adds each one here with its issue number and the exact commands while it waits for Kyle._
+_The lead adds each one here with its issue number and the exact commands while it waits for Kyle._
+
+- **#18:** install on Triton, following `docs/runbooks/backup-install.md` steps 1â€“9, one step at a time with Kyle's approval: Healthchecks checks, copy the scripts, the restore-test MySQL user and mode-600 credentials files, the site config, install rclone, `rclone config` (Kyle only), the first manual run and restore tests, replacing only the devnel.blog crontab line. Then `docs/runbooks/backup-cleanup.md` phase 1 after the first verified backup, and phase 2 after two weeks.
+- **#18 (needs 02):** the wp-env restore rehearsal in `docs/runbooks/restore.md` 3A.
 
 ## Issue template
 

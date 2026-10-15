@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+# Stub wp-cli. Records calls; `eval` also records the alert subject passed in the environment.
+echo "wp $*" >>"${STUB_LOG:?}"
+args=()
+for a in "$@"; do
+  [[ "$a" == --path=* ]] || args+=("$a")
+done
+set -- "${args[@]}"
+case "$1 $2 ${3:-}" in
+  "config get DB_NAME") echo "${STUB_DB_NAME:-devnel_blog}" ;;
+  "config get DB_USER") echo "${STUB_DB_USER:-devnel_prod}" ;;
+  "db prefix "*) echo "wp_" ;;
+  "option get siteurl") echo "${STUB_PROD_SITEURL:-https://devnel.blog}" ;;
+  "db query "*)
+    case "$3" in
+      *information_schema*) echo "${STUB_PROD_TABLES:-12}" ;;
+      *post_status*) echo "${STUB_PROD_PUBLISHED:-9}" ;;
+      *"option_name = 'siteurl'"*) echo "${STUB_PROD_SITEURL:-https://devnel.blog}" ;;
+    esac
+    ;;
+  "eval "*) echo "ALERT subject=${DEVNEL_ALERT_SUBJECT:-} to=${DEVNEL_ALERT_TO:-}" >>"$STUB_LOG" ;;
+esac

@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+# Stub mysql client for restore-test. Records the SQL passed with -e and swallows stdin on import.
+# STUB_MYSQL_USER is the current user; STUB_MYSQL_PROD_ACCESS=1 lets that user `USE` the prod DB;
+# STUB_MYSQL_FAIL_CREATE=1 fails CREATE DATABASE; STUB_MYSQL_IMPORT_RC fails the import.
+sql=""
+args=("$@")
+for i in "${!args[@]}"; do
+  if [[ "${args[$i]}" == "-e" ]]; then sql="${args[$((i + 1))]}"; fi
+done
+if [[ -z "$sql" ]]; then
+  echo "mysql IMPORT $*" >>"${STUB_LOG:?}"
+  cat >/dev/null
+  exit "${STUB_MYSQL_IMPORT_RC:-0}"
+fi
+echo "mysql SQL: $sql" >>"${STUB_LOG:?}"
+case "$sql" in
+  "SELECT @@datadir") echo "${STUB_MYSQL_DATADIR:-/var/lib/mysql/}" ;;
+  "SELECT SUBSTRING_INDEX"*) echo "${STUB_MYSQL_USER:-devnel_restoretest}" ;;
+  "USE "*)
+    if [[ "${STUB_MYSQL_PROD_ACCESS:-}" != 1 ]]; then
+      echo "ERROR 1044 Access denied" >&2
+      exit 1
+    fi
+    ;;
+  *"CREATE DATABASE"*) if [[ "${STUB_MYSQL_FAIL_CREATE:-}" == 1 ]]; then exit 1; fi ;;
+  *information_schema*) echo "${STUB_SCRATCH_TABLES:-12}" ;;
+  *post_status*) echo "${STUB_SCRATCH_PUBLISHED:-9}" ;;
+  *"option_name = 'siteurl'"*) echo "${STUB_SCRATCH_SITEURL:-https://devnel.blog}" ;;
+esac

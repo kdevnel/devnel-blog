@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+# Records its arguments. STUB_RCLONE_FAIL=1 fails copyto; STUB_RCLONE_PRUNE_FAIL=1 fails delete;
+# STUB_RCLONE_LSF is the `lsf` output; a copyto from a remote writes STUB_RCLONE_FETCH_FILE to the local path.
+echo "rclone $*" >>"${STUB_LOG:?}"
+case "$1" in
+  copyto)
+    if [[ "${STUB_RCLONE_FAIL:-}" == 1 ]]; then
+      echo "rclone: boom" >&2
+      exit 1
+    fi
+    if [[ "$2" == *:* && -n "${STUB_RCLONE_FETCH_FILE:-}" ]]; then cp "$STUB_RCLONE_FETCH_FILE" "$3"; fi
+    ;;
+  lsf) printf '%s\n' "${STUB_RCLONE_LSF:-}" ;;
+  delete)
+    if [[ "${STUB_RCLONE_PRUNE_FAIL:-}" == 1 ]]; then exit 1; fi
+    # STUB_RCLONE_DELETE_RC_<subdir>: e.g. STUB_RCLONE_DELETE_RC_nginx=3 (directory not found)
+    sub="${*: -1}"
+    sub="${sub##*/}"
+    var="STUB_RCLONE_DELETE_RC_${sub}"
+    exit "${!var:-0}"
+    ;;
+esac

@@ -34,11 +34,11 @@ Out: other sites (config-driven so they can be added later), UpdraftPlus configu
 - `docs/runbooks/backup-cleanup.md`: after the first verified new backup, delete the old `~/devnel.blog/backups/*` backlog (keep the latest old pair until the new system has 2 weeks of history).
 
 ## Acceptance criteria
-- [ ] Bats tests pass (see below).
+- [x] Bats tests pass (see below): `bats tests/shell/` (50 tests) and `shellcheck` clean.
 - [ ] On Triton (human-gated install): a manual run produces a dump whose first line is `-- MySQL dump`, a wp-content archive, an off-site copy, and a heartbeat ping.
 - [ ] `restore-test.sh` passes against that dump on Triton and reports counts matching production.
 - [ ] A full restore into wp-env from the off-site copy works, following `docs/runbooks/restore.md`.
-- [ ] Retention deletes old files (Bats with fake timestamps) and the disk check aborts when space is low.
+- [x] Retention deletes old files (Bats with fake timestamps) and the disk check aborts when space is low.
 - [ ] No password in `ps` output or in the script; config files mode 600.
 - [ ] After cleanup, `~/devnel.blog/backups` is under 1 GB and disk usage drops accordingly.
 
@@ -54,6 +54,7 @@ Out: other sites (config-driven so they can be added later), UpdraftPlus configu
 ## Decisions (Kyle, 2026-10-15)
 - **Off-site:** Google Drive through rclone: a `drive` remote wrapped in a `crypt` remote. The script only uses the crypt remote name from the site config, so switching to B2/R2/SFTP later is a config change. Because Drive has no lifecycle rules, the script prunes off-site copies itself (`rclone delete --min-age <offsite retention>` on the crypt remote, default DB 90 days / files 26 weeks) and deletes past the Drive trash (`--drive-use-trash=false`, or the equivalent remote config option), otherwise deleted dumps keep using quota. Kyle creates the OAuth token (`rclone authorize "drive"` on a machine with a browser) and the crypt passwords on Triton. The agent never handles them.
 - **Heartbeat:** self-hosted Healthchecks. The script pings `HEARTBEAT_URL` from the config (`/start` at the beginning, the plain URL on success, `/fail` on failure, as the Healthchecks API defines). Hosting it isn't part of this issue, but it shouldn't run on Triton.
+- **Heartbeat URLs are per job** (lead, during integration): `HEARTBEAT_URL_DB`, `HEARTBEAT_URL_FILES` and `RESTORE_HEARTBEAT_URL` instead of one `HEARTBEAT_URL`, so a missed weekly files run or restore test raises its own alert.
 - **UpdraftPlus:** isn't used for off-site. Whether to remove it is left to issue 15 (noted in Follow-ups).
 
 ## Team lead
@@ -73,3 +74,17 @@ Out: other sites (config-driven so they can be added later), UpdraftPlus configu
 
 ## Follow-ups
 - UpdraftPlus isn't the off-site mechanism (decision above). Decide whether to deactivate/remove it in issue 15.
+
+### Follow-ups added by the implementation (issue 18)
+- **Pending, needs wp-env (issue 02):** run `docs/runbooks/restore.md` section 3A once from the off-site copy and fill in its "Rehearsal log". The wp-env commands there are marked *(verify)*.
+- **Pending, human-gated on Triton:** everything in `docs/runbooks/backup-install.md`; then tick the Triton acceptance criteria (manual run, `restore-test.sh` counts, "no password in `ps`", config files mode 600 on the server, disk usage after `docs/runbooks/backup-cleanup.md`).
+- Heartbeats are per job (`HEARTBEAT_URL_DB`, `HEARTBEAT_URL_FILES`, `RESTORE_HEARTBEAT_URL`) so a missing weekly files run is noticed, rather than the single `HEARTBEAT_URL` the deliverable describes.
+- New backups go to `~/devnel.blog/backups-v2/` so they never mix with the legacy backlog that the cleanup runbook deletes.
+- Optional hardening: back up with a dedicated read-only MySQL user instead of the site's own DB user.
+- Issues 13 and 16 read `~/devnel.blog/backups-v2/last-success` (keys `db_time`, `db_file`, `db_sha256`, `files_*`).
+- Nit (review round 1, left as is): the install runbook's credentials checks (`SHOW GRANTS` / `USE` flags) could be tightened.
+- (review r2 nit) `docs/runbooks/backup-install.md`: `host=$(wp config get DB_HOST)` breaks for `localhost:/path.sock` or `host:port`; option files need separate `socket=`/`port=` lines. The verify step right after catches it.
+- (review r2 nit) Restore test fails loudly, not silently, if a scheduled post goes live between the dump and the test (`RESTORE_POSTS_TOLERANCE=0`), or if the DB ever gains triggers/views with a `DEFINER` (the restricted user lacks `SET_USER_ID`).
+- (review r3 nit) `deploy/cron/backup.cron`: the monthly off-site restore test uses `flock -n` on the weekly test's lock, so if the 04:00 run overruns it skips with no alert, and the shared `RESTORE_HEARTBEAT_URL` stays green. Give it its own heartbeat or `flock -w`.
+- (review r3 nit) `restore-test.sh --offsite` downloads into `${TMPDIR:-/tmp}` (same filesystem as `/`) with no free-space check before the download.
+- (review r3 nit) `backup-install.md` step 9: the `~/crontab.before-backups-*` glob breaks if the step is rerun on another day; the quoted legacy cron line has one space before `>/dev/null` where the real one has two (the `grep -vF` pattern is unaffected).

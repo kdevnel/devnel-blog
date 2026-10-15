@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+echo "df $*" >>"${STUB_LOG:?}"
+echo "Filesystem 1024-blocks Used Available Capacity Mounted on"
+echo "/dev/stub 60000000 50000000 ${STUB_DF_AVAIL_KB:-5000000} 90% /"

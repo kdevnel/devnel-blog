@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+# Records the URL (last argument). STUB_CURL_FAIL=1 simulates an unreachable heartbeat host.
+echo "curl ${*: -1}" >>"${STUB_LOG:?}"
+if [[ "${STUB_CURL_FAIL:-}" == 1 ]]; then exit 7; fi
