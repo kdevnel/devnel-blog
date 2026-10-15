@@ -1,0 +1,9 @@
+node_modules
+vendor
+package-lock.json
+composer.lock
+docs
+issues
+*.md
+.claude
+theme/**/*.html

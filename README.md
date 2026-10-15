@@ -4,7 +4,7 @@ A custom WordPress block theme for [devnel.blog](https://devnel.blog), plus the 
 
 The blog stays on WordPress, with the Block Editor, on Kyle's own server (Triton). The theme is a simpler take on the devNel brand from [devnel.com](https://devnel.com): one reading column, the same palette and fonts, and dark mode that follows the system setting.
 
-> **Status:** planning. Nothing is built yet. This folder holds the plan and the issues; it becomes the repo as the issues are completed.
+> **Status:** scaffold built (issue 01); the rest is in progress. See [`issues/README.md`](issues/README.md).
 
 ## Where to start
 
@@ -30,3 +30,19 @@ tests/shell/           Bats tests for the server scripts
 docs/                  Plan, workflow, quality bars, server notes, decisions
 issues/                The work, one file per issue
 ```
+
+## Getting started
+
+Requirements: Node 22 (`.nvmrc`), PHP 8.4 and Composer 2. `shellcheck` and `bats` are npm dev
+dependencies (no system install needed). The `shellcheck` npm package downloads its binary from
+GitHub on first use, so the first `npm run test:shell` needs network access. If that is a problem,
+install both system-wide instead (`brew install shellcheck bats-core`); `npm run check` fails with
+a clear message if either is missing.
+
+```sh
+npm ci && composer install
+npm run check     # lint (eslint, stylelint, prettier), phpcs, phpstan, shellcheck, bats
+```
+
+CI (`.github/workflows/ci.yml`) runs the same `npm run check`, plus `composer audit` and
+`npm audit --omit=dev`. Until the GitHub remote exists, `npm run check` is the gate.

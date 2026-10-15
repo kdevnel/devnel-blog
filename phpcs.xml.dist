@@ -1,0 +1,35 @@
+<?xml version="1.0"?>
+<ruleset name="devNel" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://raw.githubusercontent.com/squizlabs/PHP_CodeSniffer/master/phpcs.xsd">
+	<description>Coding standards for the devNel block theme and its tooling.</description>
+
+	<file>theme/devnel</file>
+	<exclude-pattern>*/node_modules/*</exclude-pattern>
+	<exclude-pattern>*/vendor/*</exclude-pattern>
+
+	<arg name="extensions" value="php"/>
+	<arg name="colors"/>
+	<arg value="sp"/>
+	<arg name="cache" value=".phpcs.cache"/>
+	<arg name="parallel" value="8"/>
+
+	<rule ref="WordPress"/>
+	<rule ref="PHPCompatibilityWP"/>
+	<config name="testVersion" value="8.4-"/>
+	<config name="minimum_wp_version" value="6.9"/>
+
+	<rule ref="WordPress.WP.I18n">
+		<properties>
+			<property name="text_domain" type="array">
+				<element value="devnel"/>
+			</property>
+		</properties>
+	</rule>
+
+	<rule ref="WordPress.NamingConventions.PrefixAllGlobals">
+		<properties>
+			<property name="prefixes" type="array">
+				<element value="devnel"/>
+			</property>
+		</properties>
+	</rule>
+</ruleset>

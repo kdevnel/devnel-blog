@@ -1,0 +1,6 @@
+parameters:
+    level: 6
+    paths:
+        - theme/devnel/inc
+        - theme/devnel/functions.php
+    treatPhpDocTypesAsCertain: false

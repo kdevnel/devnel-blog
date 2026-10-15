@@ -6,7 +6,7 @@ One file per issue. The team lead keeps the **Status** column current (`todo` �
 
 | # | Issue | Wave | Depends on | Implementer | Reviewer | Human-gated | Status |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| 01 | [Repo scaffold & tooling](01-repo-scaffold.md) | 0 | — | Sonnet | Opus | — | in progress |
+| 01 | [Repo scaffold & tooling](01-repo-scaffold.md) | 0 | — | Sonnet | Opus | — | done |
 | 02 | [Local environment mirroring production](02-local-environment.md) | 0 | 01 | Sonnet | Opus | — | todo |
 | 03 | [Test harness](03-test-harness.md) | 0 | 01, 02 | Sonnet | Opus | — | todo |
 | 04 | [Design tokens, fonts, dark mode](04-design-tokens.md) | 1 | 03 | **Opus** | Opus | — | todo |
@@ -23,7 +23,7 @@ One file per issue. The team lead keeps the **Status** column current (`todo` �
 | 15 | [Pre-launch housekeeping](15-prelaunch-housekeeping.md) | 3 | 19 | Haiku | Sonnet | all of it | todo |
 | 16 | [Launch](16-launch.md) | 3 | 07, 09–15, 18, 19 | Lead | Opus | all of it | todo |
 | 17 | [Ongoing maintenance automation](17-maintenance-automation.md) | 3 | 16 | Sonnet | Opus | — | todo |
-| 18 | [Reliable backups](18-backups.md) | R | — | Sonnet | Opus | cron + cleanup | in progress |
+| 18 | [Reliable backups](18-backups.md) | R | — | Sonnet | Opus | cron + cleanup | review |
 | 19 | [Safe auto-updater](19-safe-updater.md) | R | 18 (20 for majors) | **Opus** | Opus | cron, mu-plugin, first run | todo |
 | 20 | [Update canary in CI](20-update-canary.md) | R | 03, 05 | Sonnet | Opus | — | todo |
 

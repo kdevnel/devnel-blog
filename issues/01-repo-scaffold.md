@@ -24,11 +24,11 @@ Out: wp-env setup (02), test suites (03), any design (04+).
 - `CHANGELOG.md` (Keep a Changelog format), `LICENSE` (MIT).
 
 ## Acceptance criteria
-- [ ] Fresh clone: `npm ci && composer install && npm run check` passes.
+- [x] Fresh clone: `npm ci && composer install && npm run check` passes.
 - [ ] CI workflow runs on PR and push to `main`, SHA-pinned actions, read-only permissions, and runs `npm run check` plus `composer audit` and `npm audit --omit=dev`.
-- [ ] phpcs and phpstan run against `theme/devnel` and pass on the skeleton.
+- [x] phpcs and phpstan run against `theme/devnel` and pass on the skeleton.
 - [ ] The theme zip (`theme/devnel/`) passes Theme Check's required checks (run in 02/03 once wp-env exists; note it in Follow-ups if 02 isn't done yet).
-- [ ] `.gitignore` covers DB snapshots and secrets.
+- [x] `.gitignore` covers DB snapshots and secrets.
 
 ## Tests required
 None beyond the linters running green. Add a deliberate phpcs violation locally, confirm `npm run check` fails, then remove it (record this in the report).
@@ -51,3 +51,10 @@ None beyond the linters running green. Add a deliberate phpcs violation locally,
 Creating the GitHub repo (Kyle).
 
 ## Follow-ups
+
+- Theme Check (acceptance criterion 4) could not be verified: wp-env doesn't exist until issue 02. Run Theme Check's required checks against `theme/devnel/` in 02/03.
+- The GitHub remote (`kdevnel/devnel-blog`, public) was created during this issue; the CI criterion is ticked once the first run on GitHub is green. Action SHAs were looked up with `gh api` (checkout v7.0.1, setup-node v7.1.0, setup-php 2.40.0).
+- phpstan `paths` lists `theme/devnel/functions.php` as well as `inc/`: PHPStan errors on an empty path set, and `inc/` has no PHP yet. Drop it once `inc/` has code if desired.
+- The npm `shellcheck` package downloads its binary on first run (needs network).
+- (review nit) `scripts/check-shell.sh` only shellchecks `*.sh`/`*.bash`; an extensionless script would be skipped silently. Either detect bash shebangs or make the `.sh` extension a CLAUDE.md convention.
+- (review nit) Theme Check will likely want `theme/devnel/screenshot.png` and `readme.txt`; add them when 02/03 run Theme Check.

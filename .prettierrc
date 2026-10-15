@@ -1,0 +1,11 @@
+{
+  "tabWidth": 2,
+  "singleQuote": true,
+  "printWidth": 100,
+  "overrides": [
+    {
+      "files": "theme/**/*.json",
+      "options": { "useTabs": true }
+    }
+  ]
+}

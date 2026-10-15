@@ -1,0 +1,46 @@
+name: CI
+
+# Third-party actions are pinned to commit SHAs (tag in the comment).
+
+# Pushes to main, and every pull request (not both for the same commit).
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    # The check name branch protection requires on main.
+    name: CI
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962 # 2.40.0
+        with:
+          php-version: '8.4'
+          tools: composer
+          coverage: none
+      - run: npm ci
+      - run: composer install --no-interaction --no-progress --prefer-dist
+      - name: Dependency audit (PHP)
+        run: composer audit
+      - name: Dependency audit (npm, production dependencies)
+        run: npm audit --omit=dev
+      - name: Lint, static analysis, shell tests
+        run: npm run check
+      # Later issues add the Playwright browser install and e2e/axe steps
+      # here (or fold them into `npm run check`).

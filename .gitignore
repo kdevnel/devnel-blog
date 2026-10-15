@@ -1,0 +1,15 @@
+node_modules
+vendor
+.data/
+test-results/
+playwright-report/
+.env
+.env.*
+*.sql*
+.wp-env.override.json
+.DS_Store
+.phpcs.cache
+.phpunit.result.cache
+
+# Agent worktrees (Claude Code)
+.claude/worktrees/
