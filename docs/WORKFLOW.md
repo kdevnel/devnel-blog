@@ -20,7 +20,7 @@ flowchart LR
 4. **Integrate:** read the implementer's report and the diff. Run `npm run check` yourself. Fix small integration problems; anything bigger goes back to the implementer.
 5. **Review:** start the reviewer (`subagent_type: reviewer`, model in the issue, normally Opus) with **only** the issue path, the branch and the base commit. Never the implementer's reasoning.
 6. **Loop:** blocking and should-fix findings go back to the implementer (or get fixed by the lead if trivial), and then a **new** reviewer runs. Nits are optional. Stop after three rounds and escalate to Kyle.
-7. **Merge:** squash-merge to `main` with a message referencing `#NN`. Update `issues/README.md` status, tick the acceptance criteria in the issue file, and note any follow-ups.
+7. **Merge:** open a PR (`gh pr create`, title and body referencing `#NN`, with the reviewer's verdict in the body), wait for CI to go green, then `gh pr merge --squash`. Update `issues/README.md` status, tick the acceptance criteria in the issue file, and note any follow-ups.
 8. **Human-gated steps:** list the exact commands for Kyle, wait for an explicit yes, run them, record the outcome in the issue (date, output summary).
 
 ## Implementer
@@ -52,6 +52,7 @@ flowchart LR
 
 ## Branches, commits, CI
 
-- `main` is always deployable. One branch per issue. No direct pushes to `main` once CI exists.
+- `main` is always deployable. One branch per issue.
+- **Every change goes through a PR**, including docs and status bookkeeping (batch bookkeeping into the related issue's PR where it fits). `main` is protected: PR required, `CI` check must pass on an up-to-date branch, linear history, no force pushes, and admins aren't exempt.
 - CI (issue 01) runs on every PR: lint, phpcs, phpstan, stylelint, PHPUnit, Playwright + axe, contrast, Bats, `composer audit`, `npm audit --omit=dev`.
-- If the repo isn't on GitHub yet, the lead runs `npm run check` locally as the gate and notes that in the merge commit.
+- The lead still runs `npm run check` locally before opening the PR (step 4); CI is the gate for merging.
