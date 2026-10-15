@@ -30,11 +30,15 @@ ssh triton.devnel.com 'cd ~/devnel.blog/public && wp config get DB_NAME && wp co
 
 In your self-hosted Healthchecks create three checks and copy their ping URLs:
 
-| Check | Schedule | Grace |
+Use the **Cron** schedule type with the time zone set to Triton's (`timedatectl show -p Timezone --value`; `Africa/Johannesburg` at install). With UTC every check fires early and alerts as late.
+
+| Check | Cron expression | Grace |
 | --- | --- | --- |
-| devnel.blog backup db | daily, 03:15 server time | 2 hours |
-| devnel.blog backup files | weekly, Sunday 03:30 | 6 hours |
-| devnel.blog restore test | weekly, Monday 04:00 | 6 hours |
+| devnel.blog backup db | `15 3 * * *` | 2 hours |
+| devnel.blog backup files | `30 3 * * 0` | 6 hours |
+| devnel.blog restore test | `0 4 * * 1` | 6 hours |
+
+The monthly off-site restore test (04:30, first Monday) pings the restore-test check too; an extra success ping is harmless.
 
 Add the email/notification integration you want. Keep the URLs for step 4.
 
@@ -59,9 +63,11 @@ DB_NAME="$(wp config get DB_NAME)"
 SCRATCH="${DB_NAME}_restoretest"
 SCRATCH_ESC="${SCRATCH//_/\\_}"       # underscores are wildcards in GRANT, escape them
 RT_USER="${DB_NAME}_rt"               # MySQL user names are limited to 32 chars; shorten if needed
-RT_PW="$(openssl rand -hex 24)"
+RT_PW="$(openssl rand -hex 24)Aa1-"   # the suffix satisfies MySQL's validate_password policy (upper, digit, special); avoid '!' (bash history expansion)
 
-sudo mysql <<SQL
+# Triton's MySQL root uses password auth (not auth_socket), and there is no /etc/mysql/debian.cnf,
+# so `sudo mysql` is refused. Log in as root with its password; the prompt reads from the terminal.
+mysql -u root -p <<SQL
 CREATE USER '${RT_USER}'@'localhost' IDENTIFIED BY '${RT_PW}';
 GRANT ALL PRIVILEGES ON \`${SCRATCH_ESC}\`.* TO '${RT_USER}'@'localhost';
 FLUSH PRIVILEGES;
