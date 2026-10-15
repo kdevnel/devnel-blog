@@ -1,0 +1,14 @@
+# devnel.blog backups (issue 18). Install by REPLACING the old devnel.blog backup line only;
+# see docs/runbooks/backup-install.md. Don't touch any other crontab line.
+# Scripts live in /home/kyle/scripts/devnel-backup/ (separate from the legacy ~/scripts/backup.sh).
+# Times avoid the legacy 05:00 Sunday job. `%` must be escaped in crontab lines.
+
+## DEVNEL.BLOG BACKUPS ##
+# Daily database dump
+15 3 * * * /home/kyle/scripts/devnel-backup/backup.sh devnel.blog db >>/home/kyle/devnel.blog/logs/backup-cron.log 2>&1
+# Weekly wp-content + nginx config (Sunday)
+30 3 * * 0 /home/kyle/scripts/devnel-backup/backup.sh devnel.blog files >>/home/kyle/devnel.blog/logs/backup-cron.log 2>&1
+# Weekly restore test of the newest local dump (Monday)
+0 4 * * 1 flock -n /home/kyle/devnel.blog/backups-v2/.lock-restoretest /home/kyle/scripts/devnel-backup/restore-test.sh devnel.blog >>/home/kyle/devnel.blog/logs/backup-cron.log 2>&1
+# Monthly restore test of the newest OFF-SITE dump (first Monday; cron ORs day-of-month with day-of-week, so test the date in the command)
+30 4 * * 1 [ "$(date +\%d)" -le 7 ] && flock -n /home/kyle/devnel.blog/backups-v2/.lock-restoretest /home/kyle/scripts/devnel-backup/restore-test.sh devnel.blog --offsite >>/home/kyle/devnel.blog/logs/backup-cron.log 2>&1
