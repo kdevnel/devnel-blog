@@ -1,0 +1,49 @@
+#!/usr/bin/env bash
+# Stub npx, answering only `npx wp-env run cli wp ...`. Records each wp call in STUB_LOG.
+# STUB_WPENV_DOWN=1: wp-env is not running (every call fails).
+# STUB_ADMIN_EXISTS=1: `wp user get admin` succeeds. STUB_NOT_ACTIVE="a b": `wp plugin deactivate`
+# fails for those plugins. STUB_WPENV_FAIL_AT=<substring>: fail any wp call containing it.
+# SQL sent to `wp db query` is handled by _sql_responder.
+here="$(dirname "${BASH_SOURCE[0]}")"
+[[ "$1" == "wp-env" ]] || {
+  echo "npx stub: unexpected command: $*" >&2
+  exit 127
+}
+shift
+if [[ "$1" == "start" ]]; then
+  echo "wp-env $*" >>"${STUB_LOG:?}"
+  exit 0
+fi
+[[ "$1 $2" == "run cli" ]] || {
+  echo "npx stub: unexpected wp-env command: $*" >&2
+  exit 127
+}
+shift 2
+[[ "$1" == "wp" ]] && shift
+args="$*"
+if [[ "${STUB_WPENV_DOWN:-}" == 1 ]]; then exit 1; fi
+if [[ -n "${STUB_WPENV_FAIL_AT:-}" && "$args" == *"$STUB_WPENV_FAIL_AT"* ]]; then
+  echo "wp-env wp $args" >>"${STUB_LOG:?}"
+  exit 1
+fi
+case "$args" in
+  "db query"*) exec "$here/_sql_responder" wpenv ;;
+  "db import -")
+    echo "wp-env wp $args ($(wc -c | tr -d ' ') bytes)" >>"${STUB_LOG:?}"
+    ;;
+  "core version"*) echo "wp-env wp $args" >>"${STUB_LOG:?}" ;;
+  "user get admin"*)
+    echo "wp-env wp $args" >>"${STUB_LOG:?}"
+    [[ "${STUB_ADMIN_EXISTS:-}" == 1 ]]
+    ;;
+  "plugin deactivate "*)
+    echo "wp-env wp $args" >>"${STUB_LOG:?}"
+    plugin="${args#plugin deactivate }"
+    [[ " ${STUB_NOT_ACTIVE:-} " != *" $plugin "* ]]
+    ;;
+  *"--format=count"*)
+    echo "wp-env wp $args" >>"${STUB_LOG:?}"
+    echo 7
+    ;;
+  *) echo "wp-env wp $args" >>"${STUB_LOG:?}" ;;
+esac

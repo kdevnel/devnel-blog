@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+# Stub ssh for the pull-db, sync-env-versions and pull-uploads tests. Records the call and answers
+# the few read-only remote commands those scripts run.
+# STUB_SSH_RC: exit code (default 0). With `wp db export -`, STUB_SSH_SQL_FILE is streamed first
+# (default: a tiny SQL dump), so a non-zero STUB_SSH_RC simulates a dropped connection.
+# STUB_SSH_FAIL_AT=<command substring>: only fail for that remote command.
+echo "ssh $*" >>"${STUB_LOG:?}"
+cmd="${*: -1}"
+rc="${STUB_SSH_RC:-0}"
+if [[ -n "${STUB_SSH_FAIL_AT:-}" && "$cmd" != *"$STUB_SSH_FAIL_AT"* ]]; then rc=0; fi
+case "$cmd" in
+  *"wp db export - "*)
+    if [[ -n "${STUB_SSH_SLEEP:-}" ]]; then sleep "$STUB_SSH_SLEEP"; fi
+    if [[ -n "${STUB_SSH_SQL_FILE:-}" ]]; then
+      cat "$STUB_SSH_SQL_FILE"
+    else
+      echo "-- stub dump"
+      echo "CREATE TABLE wp_posts (ID int);"
+    fi
+    ;;
+  *"wp core version"*) [[ "$rc" == 0 ]] && echo "${STUB_CORE_VERSION:-1.2.3}" ;;
+  *"wp plugin list"*)
+    default='[{"name":"akismet","version":"1.0.0","status":"active"}]'
+    [[ "$rc" == 0 ]] && echo "${STUB_PLUGINS_JSON:-$default}"
+    ;;
+esac
+exit "$rc"

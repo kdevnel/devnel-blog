@@ -1,0 +1,7 @@
+# Plugin slugs deactivated in wp-env after the import (the plugin may not be installed locally).
+# worker's mu-plugin (0-worker) is not mapped into wp-env, so there is nothing to deactivate for it.
+worker
+post-smtp
+updraftplus
+nginx-cache
+redis-cache

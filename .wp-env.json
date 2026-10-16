@@ -1,0 +1,23 @@
+{
+  "core": "WordPress/WordPress#7.1.3",
+  "phpVersion": "8.4",
+  "themes": ["./theme/devnel"],
+  "plugins": [
+    "https://downloads.wordpress.org/plugin/activitypub.9.3.1.zip",
+    "https://downloads.wordpress.org/plugin/friends.4.4.0.zip",
+    "https://downloads.wordpress.org/plugin/akismet.5.7.2.zip",
+    "https://downloads.wordpress.org/plugin/redirection.5.10.1.zip",
+    "https://downloads.wordpress.org/plugin/syntaxhighlighter.3.7.2.zip"
+  ],
+  "port": 8888,
+  "testsPort": 8889,
+  "config": {
+    "WP_DEBUG": true,
+    "WP_DEBUG_LOG": true,
+    "SCRIPT_DEBUG": true
+  },
+  "mappings": {
+    "wp-content/uploads": "./.data/uploads",
+    "wp-content/tools": "./tools"
+  }
+}

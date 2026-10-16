@@ -1,0 +1,10 @@
+# wp_usermeta rows removed by the sanitiser, and checked absent by check-sanitised.sh.
+# Same format as options-delete.txt (matched against meta_key).
+session_tokens
+magic_sig_private_key
+magic_sig_public_key
+jetpack_account_protection_recent_password_hashes
+!_application!_passwords
+%private%
+%token%
+%secret%

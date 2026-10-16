@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+# Stub git: only `check-ignore`. STUB_GIT_NOT_IGNORED=1 makes it report "not ignored" (exit 1).
+echo "git $*" >>"${STUB_LOG:?}"
+for a in "$@"; do
+  if [[ "$a" == "check-ignore" ]]; then
+    [[ "${STUB_GIT_NOT_IGNORED:-}" != 1 ]]
+    exit
+  fi
+done
+echo "git stub: unexpected command: $*" >&2
+exit 127

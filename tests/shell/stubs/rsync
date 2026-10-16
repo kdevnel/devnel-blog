@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+# Stub rsync: records the arguments. STUB_RSYNC_RC sets the exit code.
+echo "rsync $*" >>"${STUB_LOG:?}"
+exit "${STUB_RSYNC_RC:-0}"

@@ -1,0 +1,46 @@
+#!/usr/bin/env bash
+# Shared by the docker and npx stubs: plays the part of a MySQL server that receives SQL on stdin.
+# Argument 1 labels the target in the log ("container" or "wpenv"). Records the kind of SQL it
+# received (the first line of the scripts our code generates starts with "-- devnel-...") and saves
+# a copy in $STUB_SQL_DIR for the tests to inspect.
+#   STUB_COLUMNS      table<TAB>column rows for information_schema.columns
+#                     (default: wp_options.option_name, wp_posts.post_content)
+#   STUB_TRUNC_TABLES tables that match the truncate list (default none)
+#   STUB_CHECK_OUTPUT what the check query prints (default nothing = clean); the per-target
+#                     STUB_CHECK_OUTPUT_container and STUB_CHECK_OUTPUT_wpenv take precedence
+#   STUB_POSTS        result of SELECT COUNT(*) FROM wp_posts (default 5)
+#   STUB_IMPORT_RC    exit code for a raw SQL stream (the production dump)
+target="$1"
+sql="$(cat)"
+first="${sql%%$'\n'*}"
+dir="${STUB_SQL_DIR:-${BATS_TEST_TMPDIR:-/tmp}}"
+n="$(($(find "$dir" -maxdepth 1 -name 'sql-*' 2>/dev/null | wc -l) + 1))"
+case "$first" in
+  "-- devnel-sanitise-truncate")
+    echo "$target sanitise-truncate" >>"${STUB_LOG:?}"
+    printf '%s\n' "$sql" >"$dir/sql-$n-truncate.sql"
+    ;;
+  "-- devnel-sanitise")
+    echo "$target sanitise" >>"${STUB_LOG:?}"
+    printf '%s\n' "$sql" >"$dir/sql-$n-sanitise.sql"
+    ;;
+  "-- devnel-check")
+    echo "$target check" >>"${STUB_LOG:?}"
+    printf '%s\n' "$sql" >"$dir/sql-$n-check.sql"
+    # STUB_CHECK_OUTPUT_container / STUB_CHECK_OUTPUT_wpenv override STUB_CHECK_OUTPUT per target.
+    var="STUB_CHECK_OUTPUT_$target"
+    out="${!var:-${STUB_CHECK_OUTPUT:-}}"
+    if [[ -n "$out" ]]; then printf '%b\n' "$out"; fi
+    ;;
+  *"information_schema.columns"*)
+    printf '%b\n' "${STUB_COLUMNS:-wp_options\toption_name\nwp_posts\tpost_content}"
+    ;;
+  *"information_schema.tables"*)
+    if [[ -n "${STUB_TRUNC_TABLES:-}" ]]; then printf '%b\n' "$STUB_TRUNC_TABLES"; fi
+    ;;
+  *"COUNT(*) FROM wp_posts"*) echo "${STUB_POSTS:-5}" ;;
+  *)
+    echo "$target stream" >>"${STUB_LOG:?}"
+    exit "${STUB_IMPORT_RC:-0}"
+    ;;
+esac
