@@ -204,7 +204,7 @@ failed_with_alert() {
   write_meminfo 1000 400
   run_rt
   [ "$status" -ne 0 ]
-  [[ "$output" == *"not enough free memory for restore test: 1400 MB available (RAM + swap), 1536 MB required"* ]]
+  [[ "$output" == *"not enough free memory for restore test: 1400 MB available (RAM + swap), 1536 MB required"* ]] || false
   no_scratch_sql
   failed_with_alert
 }
@@ -213,8 +213,8 @@ failed_with_alert() {
   write_meminfo 1000 600
   run_rt
   [ "$status" -eq 0 ]
-  [[ "$output" == *"memory headroom at start: 1600 MB"* ]]
-  [[ "$output" == *"memory headroom: 1600 MB at start, lowest 1600 MB during import"* ]]
+  [[ "$output" == *"memory headroom at start: 1600 MB"* ]] || false
+  [[ "$output" == *"memory headroom: 1600 MB at start, lowest 1600 MB during import"* ]] || false
 }
 
 @test "memory: the start threshold is configurable" {
@@ -222,7 +222,7 @@ failed_with_alert() {
   write_config "RESTORE_MIN_MEM_MB=4000" "RESTORE_ABORT_MEM_MB=100"
   run_rt
   [ "$status" -ne 0 ]
-  [[ "$output" == *"3000 MB available (RAM + swap), 4000 MB required"* ]]
+  [[ "$output" == *"3000 MB available (RAM + swap), 4000 MB required"* ]] || false
   write_config "RESTORE_MIN_MEM_MB=2500" "RESTORE_ABORT_MEM_MB=100"
   run_rt
   [ "$status" -eq 0 ]
@@ -233,14 +233,14 @@ failed_with_alert() {
   write_config "RESTORE_MIN_MEM_MB=0" "RESTORE_ABORT_MEM_MB=0"
   run_rt
   [ "$status" -eq 0 ]
-  [[ "$output" == *"memory pre-check disabled"* ]]
+  [[ "$output" == *"memory pre-check disabled"* ]] || false
 }
 
 @test "memory: unreadable meminfo fails closed before any scratch SQL" {
   rm -f "$MEMINFO_FILE"
   run_rt
   [ "$status" -ne 0 ]
-  [[ "$output" == *"cannot read MemAvailable and SwapFree"* ]]
+  [[ "$output" == *"cannot read MemAvailable and SwapFree"* ]] || false
   no_scratch_sql
   failed_with_alert
 }
@@ -249,7 +249,7 @@ failed_with_alert() {
   printf 'MemTotal: 16000000 kB\nMemAvailable: 9000000 kB\n' >"$MEMINFO_FILE"
   run_rt
   [ "$status" -ne 0 ]
-  [[ "$output" == *"cannot read MemAvailable and SwapFree"* ]]
+  [[ "$output" == *"cannot read MemAvailable and SwapFree"* ]] || false
   no_scratch_sql
 }
 
@@ -257,19 +257,19 @@ failed_with_alert() {
   write_config "RESTORE_MIN_MEM_MB=lots"
   run_rt
   [ "$status" -ne 0 ]
-  [[ "$output" == *"RESTORE_MIN_MEM_MB must be a non-negative integer"* ]]
+  [[ "$output" == *"RESTORE_MIN_MEM_MB must be a non-negative integer"* ]] || false
   write_config "RESTORE_ABORT_MEM_MB=-5"
   run_rt
   [ "$status" -ne 0 ]
-  [[ "$output" == *"RESTORE_ABORT_MEM_MB must be a non-negative integer"* ]]
+  [[ "$output" == *"RESTORE_ABORT_MEM_MB must be a non-negative integer"* ]] || false
   write_config "RESTORE_MEM_POLL_SECONDS=0"
   run_rt
   [ "$status" -ne 0 ]
-  [[ "$output" == *"RESTORE_MEM_POLL_SECONDS must be a positive integer"* ]]
+  [[ "$output" == *"RESTORE_MEM_POLL_SECONDS must be an integer from 1 to 60"* ]] || false
   write_config "RESTORE_MIN_MEM_MB=500" "RESTORE_ABORT_MEM_MB=500"
   run_rt
   [ "$status" -ne 0 ]
-  [[ "$output" == *"must be less than RESTORE_MIN_MEM_MB"* ]]
+  [[ "$output" == *"must be less than RESTORE_MIN_MEM_MB"* ]] || false
   no_scratch_sql
 }
 
@@ -277,7 +277,7 @@ failed_with_alert() {
   write_config "RESTORE_MIN_MEM_MB=500" "RESTORE_ABORT_MEM_MB=0"
   run_rt
   [ "$status" -eq 0 ]
-  [[ "$output" == *"import not monitored"* ]]
+  [[ "$output" == *"import not monitored"* ]] || false
 }
 
 @test "watchdog: low memory during the import kills it, fails with the reason, and still drops the scratch DB" {
@@ -289,7 +289,7 @@ failed_with_alert() {
   run_rt
   [ "$status" -ne 0 ]
   [ $((SECONDS - start)) -lt 15 ]
-  [[ "$output" == *"import aborted: memory headroom fell to 300 MB (floor 512 MB)"* ]]
+  [[ "$output" == *"import aborted: memory headroom fell to 300 MB (floor 512 MB)"* ]] || false
   [ "$(grep -c 'DROP DATABASE IF EXISTS `devnel_blog_restoretest`' "$STUB_LOG")" -ge 2 ]
   failed_with_alert
   grep -q 'ALERT .*body=import aborted: memory headroom fell to 300 MB' "$STUB_LOG"
@@ -304,7 +304,7 @@ failed_with_alert() {
   write_config "RESTORE_MEM_POLL_SECONDS=1"
   run_rt
   [ "$status" -eq 0 ]
-  [[ "$output" == *"memory headroom: 2100 MB at start, lowest 2100 MB during import (abort floor 512 MB)"* ]]
+  [[ "$output" == *"memory headroom: 2100 MB at start, lowest 2100 MB during import (abort floor 512 MB)"* ]] || false
   ! grep -q 'restore-uuid/fail' "$STUB_LOG" || false
   grep -q 'curl https://hc.example.test/ping/restore-uuid$' "$STUB_LOG"
 }
@@ -312,8 +312,8 @@ failed_with_alert() {
 @test "watchdog: an import that fails by itself still fails with its own error" {
   STUB_MYSQL_IMPORT_RC=1 run_rt
   [ "$status" -ne 0 ]
-  [[ "$output" != *"import aborted"* ]]
-  [[ "$output" == *"import into devnel_blog_restoretest failed (exit 1)"* ]]
+  [[ "$output" != *"import aborted"* ]] || false
+  [[ "$output" == *"import into devnel_blog_restoretest failed (exit 1)"* ]] || false
   grep -q 'ALERT .*body=import into devnel_blog_restoretest failed (exit 1)' "$STUB_LOG"
   failed_with_alert
 }
@@ -329,27 +329,29 @@ failed_with_alert() {
   write_config "RESTORE_MIN_MEM_MB=0900"
   run_rt
   [ "$status" -ne 0 ]
-  [[ "$output" == *"RESTORE_MIN_MEM_MB must be a non-negative integer without leading zeros"* ]]
+  [[ "$output" == *"RESTORE_MIN_MEM_MB must be a non-negative integer without leading zeros"* ]] || false
   write_config "RESTORE_ABORT_MEM_MB=0512"
   run_rt
   [ "$status" -ne 0 ]
-  [[ "$output" == *"RESTORE_ABORT_MEM_MB must be a non-negative integer without leading zeros"* ]]
+  [[ "$output" == *"RESTORE_ABORT_MEM_MB must be a non-negative integer without leading zeros"* ]] || false
   write_config "RESTORE_MEM_POLL_SECONDS=02"
   run_rt
   [ "$status" -ne 0 ]
-  [[ "$output" == *"RESTORE_MEM_POLL_SECONDS must be a positive integer without leading zeros"* ]]
+  [[ "$output" == *"RESTORE_MEM_POLL_SECONDS must be an integer from 1 to 60 without leading zeros"* ]] || false
   no_scratch_sql
 }
 
-@test "watchdog: fails closed at startup when pgrep is missing" {
+@test "watchdog: fails closed at startup when pgrep is missing, with the watchdog on or off" {
   PGREP_BIN=no-such-pgrep-binary run_rt
   [ "$status" -ne 0 ]
-  [[ "$output" == *"pgrep is required for the import watchdog"* ]]
+  [[ "$output" == *"pgrep is required to stop the import"* ]] || false
   no_scratch_sql
-  # not needed when the watchdog is off
+  # also required with the watchdog off: the signal path stops the import with it
   write_config "RESTORE_ABORT_MEM_MB=0"
   PGREP_BIN=no-such-pgrep-binary run_rt
-  [ "$status" -eq 0 ]
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"pgrep is required to stop the import"* ]] || false
+  no_scratch_sql
 }
 
 @test "watchdog: meminfo losing its fields during the import aborts it and drops the scratch DB" {
@@ -361,7 +363,7 @@ failed_with_alert() {
   run_rt
   [ "$status" -ne 0 ]
   [ $((SECONDS - start)) -lt 15 ]
-  [[ "$output" == *"import aborted: cannot read MemAvailable and SwapFree"* ]]
+  [[ "$output" == *"import aborted: cannot read MemAvailable and SwapFree"* ]] || false
   [ "$(grep -c 'DROP DATABASE IF EXISTS `devnel_blog_restoretest`' "$STUB_LOG")" -ge 2 ]
   failed_with_alert
   read -r stub_pid sleep_pid <"$STUB_MYSQL_PIDFILE"
@@ -387,4 +389,99 @@ failed_with_alert() {
   read -r stub_pid sleep_pid <"$STUB_MYSQL_PIDFILE"
   ! kill -0 "$stub_pid" 2>/dev/null || false
   ! kill -0 "$sleep_pid" 2>/dev/null || false
+}
+
+@test "memory: overlong numbers cannot wrap around, and the poll interval is capped at 60" {
+  write_config "RESTORE_ABORT_MEM_MB=18446744073709551104"
+  run_rt
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"RESTORE_ABORT_MEM_MB must be a non-negative integer"* ]] || false
+  write_config "RESTORE_MIN_MEM_MB=18446744073709551104"
+  run_rt
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"RESTORE_MIN_MEM_MB must be a non-negative integer"* ]] || false
+  write_config "RESTORE_MEM_POLL_SECONDS=61"
+  run_rt
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"RESTORE_MEM_POLL_SECONDS must be an integer from 1 to 60"* ]] || false
+  write_config "RESTORE_MEM_POLL_SECONDS=60"
+  run_rt
+  [ "$status" -eq 0 ]
+}
+
+@test "watchdog: the lowest headroom seen during the import is logged" {
+  write_config "RESTORE_MEM_POLL_SECONDS=1"
+  export STUB_MYSQL_IMPORT_SLEEP=2 STUB_MYSQL_PIDFILE="$BATS_TEST_TMPDIR/import.pids"
+  export STUB_MYSQL_IMPORT_MEMINFO="$MEMINFO_FILE"
+  export STUB_MYSQL_IMPORT_MEMINFO_TEXT='MemAvailable: 921600 kB\nSwapFree: 0 kB\n'
+  run_rt
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"memory headroom: 8192 MB at start, lowest 900 MB during import"* ]] || false
+}
+
+# send_signal_during_import <SIG>: start the script with a hanging import, signal it, wait.
+# Job control gives the background job default signal handling (otherwise INT is ignored).
+send_signal_during_import() {
+  set -m
+  write_config "RESTORE_MEM_POLL_SECONDS=1"
+  export STUB_MYSQL_IMPORT_SLEEP=30 STUB_MYSQL_PIDFILE="$BATS_TEST_TMPDIR/import.pids"
+  "$RESTORE_SH" test >"$BATS_TEST_TMPDIR/out.log" 2>&1 &
+  SCRIPT_PID=$!
+  local i
+  for i in $(seq 1 100); do [ -s "$STUB_MYSQL_PIDFILE" ] && break; sleep 0.1; done
+  [ -s "$STUB_MYSQL_PIDFILE" ]
+}
+
+@test "signal: INT and HUP each kill the import, drop the scratch DB and alert with the signal" {
+  local sig code rc
+  for sig in INT:130 HUP:129; do
+    code="${sig#*:}"
+    sig="${sig%%:*}"
+    : >"$STUB_LOG"
+    rm -f "$BATS_TEST_TMPDIR/import.pids"
+    send_signal_during_import
+    kill -"$sig" "$SCRIPT_PID"
+    rc=0
+    wait "$SCRIPT_PID" || rc=$?
+    [ "$rc" -eq "$code" ]
+    grep -q "ALERT .*body=interrupted by signal $sig" "$STUB_LOG"
+    grep -q 'restore-uuid/fail' "$STUB_LOG"
+    [ "$(grep -c 'DROP DATABASE IF EXISTS `devnel_blog_restoretest`' "$STUB_LOG")" -ge 2 ]
+    read -r stub_pid sleep_pid <"$STUB_MYSQL_PIDFILE"
+    ! kill -0 "$stub_pid" 2>/dev/null || false
+    ! kill -0 "$sleep_pid" 2>/dev/null || false
+  done
+}
+
+@test "signal: a second signal during cleanup does not interrupt the DROP or the alert" {
+  export STUB_MYSQL_DROP_SLEEP=2
+  send_signal_during_import
+  kill -TERM "$SCRIPT_PID"
+  local i rc=0
+  for i in $(seq 1 100); do grep -q 'mysql DROP SLOW' "$STUB_LOG" && break; sleep 0.1; done
+  grep -q 'mysql DROP SLOW' "$STUB_LOG"
+  kill -TERM "$SCRIPT_PID"
+  wait "$SCRIPT_PID" || rc=$?
+  [ "$rc" -eq 143 ]
+  grep -q 'mysql DROP DONE' "$STUB_LOG"
+  grep -q 'ALERT .*body=interrupted by signal TERM' "$STUB_LOG"
+  grep -q 'restore-uuid/fail' "$STUB_LOG"
+}
+
+@test "signal: a signal during the abort teardown keeps the memory-abort reason" {
+  set -m
+  write_config "RESTORE_MEM_POLL_SECONDS=1"
+  export STUB_MYSQL_IMPORT_SLEEP=30 STUB_MYSQL_PIDFILE="$BATS_TEST_TMPDIR/import.pids"
+  export STUB_MYSQL_IGNORE_TERM=1
+  export STUB_MYSQL_IMPORT_MEMINFO="$MEMINFO_FILE"
+  export STUB_MYSQL_IMPORT_MEMINFO_TEXT='MemAvailable: 204800 kB\nSwapFree: 0 kB\n'
+  "$RESTORE_SH" test >"$BATS_TEST_TMPDIR/out.log" 2>&1 &
+  local pid=$! i rc=0
+  # the import ignores TERM, so the watchdog is stuck in its teardown wait for a few seconds
+  for i in $(seq 1 100); do grep -q 'killing the import' "$BATS_TEST_TMPDIR/out.log" && break; sleep 0.1; done
+  grep -q 'killing the import' "$BATS_TEST_TMPDIR/out.log"
+  kill -TERM "$pid"
+  wait "$pid" || rc=$?
+  [ "$rc" -eq 143 ]
+  grep -q 'ALERT .*body=import aborted: memory headroom fell to 200 MB (floor 512 MB); then interrupted by signal TERM' "$STUB_LOG"
 }

@@ -63,9 +63,14 @@ on_exit() {
   exit "$rc"
 }
 trap on_exit EXIT
-trap 'FAIL_MSG="interrupted by signal TERM"; exit 143' TERM
-trap 'FAIL_MSG="interrupted by signal INT"; exit 130' INT
-trap 'FAIL_MSG="interrupted by signal HUP"; exit 129' HUP
+# Keep an earlier failure reason (e.g. a memory abort being torn down) and add the signal to it.
+on_signal() {
+  FAIL_MSG="${FAIL_MSG:+$FAIL_MSG; then }interrupted by signal $1"
+  exit "$2"
+}
+trap 'on_signal TERM 143' TERM
+trap 'on_signal INT 130' INT
+trap 'on_signal HUP 129' HUP
 
 load_config "$SITE"
 STARTED=1
@@ -76,17 +81,16 @@ is_uint "$RESTORE_POSTS_TOLERANCE" || die "RESTORE_POSTS_TOLERANCE must be a non
 : "${RESTORE_ABORT_MEM_MB:=512}"
 : "${RESTORE_MEM_POLL_SECONDS:=2}"
 # No leading zeros: bash would read 0512 as octal (and 0900 as an error that makes a test false).
-canon_uint='^(0|[1-9][0-9]*)$'
+canon_uint='^(0|[1-9][0-9]{0,8})$' # at most 9 digits: no arithmetic wrap-around
 [[ "$RESTORE_MIN_MEM_MB" =~ $canon_uint ]] ||
   die "RESTORE_MIN_MEM_MB must be a non-negative integer without leading zeros (is '$RESTORE_MIN_MEM_MB')"
 [[ "$RESTORE_ABORT_MEM_MB" =~ $canon_uint ]] ||
   die "RESTORE_ABORT_MEM_MB must be a non-negative integer without leading zeros (is '$RESTORE_ABORT_MEM_MB')"
-if ! [[ "$RESTORE_MEM_POLL_SECONDS" =~ $canon_uint ]] || [[ "$RESTORE_MEM_POLL_SECONDS" -lt 1 ]]; then
-  die "RESTORE_MEM_POLL_SECONDS must be a positive integer without leading zeros (is '$RESTORE_MEM_POLL_SECONDS')"
+if ! [[ "$RESTORE_MEM_POLL_SECONDS" =~ $canon_uint ]] || [[ "$RESTORE_MEM_POLL_SECONDS" -lt 1 || "$RESTORE_MEM_POLL_SECONDS" -gt 60 ]]; then
+  die "RESTORE_MEM_POLL_SECONDS must be an integer from 1 to 60 without leading zeros (is '$RESTORE_MEM_POLL_SECONDS')"
 fi
-if [[ "$RESTORE_ABORT_MEM_MB" -ne 0 ]]; then
-  command -v "${PGREP_BIN:-pgrep}" >/dev/null 2>&1 || die "pgrep is required for the import watchdog"
-fi
+# Needed to stop the import (and its children) on the watchdog and the signal paths alike.
+command -v "${PGREP_BIN:-pgrep}" >/dev/null 2>&1 || die "pgrep is required to stop the import"
 if [[ "$RESTORE_MIN_MEM_MB" -ne 0 && "$RESTORE_ABORT_MEM_MB" -ne 0 && "$RESTORE_ABORT_MEM_MB" -ge "$RESTORE_MIN_MEM_MB" ]]; then
   die "RESTORE_ABORT_MEM_MB ($RESTORE_ABORT_MEM_MB) must be less than RESTORE_MIN_MEM_MB ($RESTORE_MIN_MEM_MB)"
 fi
