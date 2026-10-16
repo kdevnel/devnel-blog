@@ -90,9 +90,9 @@ run_pull() { run "$PULL"; }
   [ "$status" -ne 0 ]
   [[ "$output" == *"email wp_users.user_email"* ]]
   [[ "$output" == *"failed the check"* ]]
-  ! grep -q 'mysqldump' "$STUB_LOG"
+  ! grep -q 'mysqldump' "$STUB_LOG" || false
   nothing_in_wpenv
-  ! grep -q '^wp-env wp db import' "$STUB_LOG"
+  ! grep -q '^wp-env wp db import' "$STUB_LOG" || false
   [ -z "$(find "$DATA" -name 'sanitised-*' 2>/dev/null)" ]
   container_removed
 }
@@ -101,8 +101,8 @@ run_pull() { run "$PULL"; }
   STUB_SANITISE_RC=1 run_pull
   [ "$status" -ne 0 ]
   [[ "$output" == *"sanitising failed"* ]]
-  ! grep -q '^container check$' "$STUB_LOG"
-  ! grep -q 'mysqldump' "$STUB_LOG"
+  ! grep -q '^container check$' "$STUB_LOG" || false
+  ! grep -q 'mysqldump' "$STUB_LOG" || false
   nothing_in_wpenv
   container_removed
 }
@@ -113,8 +113,8 @@ run_pull() { run "$PULL"; }
   [[ "$output" == *"nothing was imported into wp-env"* ]]
   container_removed
   nothing_in_wpenv
-  ! grep -q 'mysqldump' "$STUB_LOG"
-  ! grep -q '^container sanitise' "$STUB_LOG"
+  ! grep -q 'mysqldump' "$STUB_LOG" || false
+  ! grep -q '^container sanitise' "$STUB_LOG" || false
   [ -z "$(find "$DATA" -name 'sanitised-*' 2>/dev/null)" ]
 }
 
@@ -123,7 +123,7 @@ run_pull() { run "$PULL"; }
   [ "$status" -ne 0 ]
   container_removed
   nothing_in_wpenv
-  ! grep -q 'mysqldump' "$STUB_LOG"
+  ! grep -q 'mysqldump' "$STUB_LOG" || false
 }
 
 @test "an empty import is refused" {
@@ -139,7 +139,7 @@ run_pull() { run "$PULL"; }
   [ "$status" -ne 0 ]
   [[ "$output" == *"did not become ready"* ]]
   container_removed
-  ! grep -q '^ssh ' "$STUB_LOG"
+  ! grep -q '^ssh ' "$STUB_LOG" || false
   nothing_in_wpenv
 }
 
@@ -148,7 +148,7 @@ run_pull() { run "$PULL"; }
   [ "$status" -ne 0 ]
   # a half-created container is still removed by the trap
   container_removed
-  ! grep -q '^ssh ' "$STUB_LOG"
+  ! grep -q '^ssh ' "$STUB_LOG" || false
   nothing_in_wpenv
 }
 
@@ -197,15 +197,15 @@ run_pull() { run "$PULL"; }
   STUB_WPENV_DOWN=1 run_pull
   [ "$status" -ne 0 ]
   [[ "$output" == *"wp-env is not running"* ]]
-  ! grep -q '^docker run' "$STUB_LOG"
-  ! grep -q '^ssh ' "$STUB_LOG"
+  ! grep -q '^docker run' "$STUB_LOG" || false
+  ! grep -q '^ssh ' "$STUB_LOG" || false
 }
 
 @test "docker not running: fails before touching production" {
   STUB_DOCKER_DOWN=1 run_pull
   [ "$status" -ne 0 ]
   [[ "$output" == *"docker is not running"* ]]
-  ! grep -q '^ssh ' "$STUB_LOG"
+  ! grep -q '^ssh ' "$STUB_LOG" || false
 }
 
 # --- after the import ----------------------------------------------------------------------------
@@ -228,7 +228,7 @@ run_pull() { run "$PULL"; }
   STUB_ADMIN_EXISTS=1 run_pull
   [ "$status" -eq 0 ]
   grep -q '^wp-env wp user update admin --user_pass=password --role=administrator' "$STUB_LOG"
-  ! grep -q '^wp-env wp user create' "$STUB_LOG"
+  ! grep -q '^wp-env wp user create' "$STUB_LOG" || false
 }
 
 @test "the production-only plugins are deactivated; one that is not installed locally is not an error" {
@@ -240,7 +240,7 @@ run_pull() { run "$PULL"; }
 }
 
 @test "options WordPress or plugins write locally are deleted again just before the final wp-env check" {
-  run_pull
+  STUB_PRESENT_OPTIONS='_transient_x' run_pull
   [ "$status" -eq 0 ]
   cleanup="$(line_no '^wpenv sanitise-options$')"
   wpenv_check="$(line_no '^wpenv check$')"
@@ -299,7 +299,7 @@ run_pull() { run "$PULL"; }
   [ "$status" -eq 0 ]
   [ "$(find "$DATA" -type f | wc -l | tr -d ' ')" -eq 1 ]
   [[ "$(find "$DATA" -type f)" == "$DATA"/sanitised-????????.sql.gz ]]
-  ! grep -rl 'CREATE TABLE wp_posts (ID int)' "$BATS_TEST_TMPDIR" --include='*' 2>/dev/null | grep -v '/stub\.log$' | grep .
+  ! grep -rl 'CREATE TABLE wp_posts (ID int)' "$BATS_TEST_TMPDIR" --include='*' 2>/dev/null | grep -v '/stub\.log$' | grep . || false
 }
 
 @test "snapshot pruning keeps the newest 3 and leaves other files alone" {
@@ -330,8 +330,8 @@ run_pull() { run "$PULL"; }
   STUB_GIT_NOT_IGNORED=1 run_pull
   [ "$status" -ne 0 ]
   [[ "$output" == *"not gitignored"* ]]
-  ! grep -q '^docker run' "$STUB_LOG"
-  ! grep -q '^ssh ' "$STUB_LOG"
+  ! grep -q '^docker run' "$STUB_LOG" || false
+  ! grep -q '^ssh ' "$STUB_LOG" || false
   grep -q '^git .*check-ignore' "$STUB_LOG"
 }
 
@@ -342,5 +342,5 @@ run_pull() { run "$PULL"; }
 }
 
 @test "pull-db.sh copies nothing to or from production except through the one ssh export" {
-  ! grep -nE '(^|[^a-z])(scp|rsync|sftp)[[:space:]]' "$SRC_ROOT/scripts/pull-db.sh"
+  ! grep -nE '(^|[^a-z])(scp|rsync|sftp)[[:space:]]' "$SRC_ROOT/scripts/pull-db.sh" || false
 }

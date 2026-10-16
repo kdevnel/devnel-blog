@@ -23,16 +23,16 @@ setup() { pull_setup; }
 @test "--container runs the SQL with docker exec on that container; the default targets wp-env" {
   run "$CHECK" --container c1
   grep -q '^docker exec -i c1 mysql ' "$STUB_LOG"
-  ! grep -q '^wp-env' "$STUB_LOG"
+  ! grep -q '^wp-env' "$STUB_LOG" || false
   : >"$STUB_LOG"
   run "$CHECK"
   [ "$status" -eq 0 ]
   grep -q '^wpenv check$' "$STUB_LOG"
-  ! grep -q '^docker exec' "$STUB_LOG"
+  ! grep -q '^docker exec' "$STUB_LOG" || false
 }
 
 @test "--wp-env deletes the listed options first (transients written by normal use); --container never writes" {
-  run "$CHECK"
+  STUB_PRESENT_OPTIONS='_transient_feed\n_site_transient_update_core\nactivitypub_keypair_for_0' run "$CHECK"
   [ "$status" -eq 0 ]
   cleanup="$(line_no '^wpenv sanitise-options$')"
   check="$(line_no '^wpenv check$')"
@@ -43,7 +43,47 @@ setup() { pull_setup; }
   : >"$STUB_LOG"
   run "$CHECK" --container c1
   [ "$status" -eq 0 ]
-  ! grep -q 'sanitise-options' "$STUB_LOG"
+  ! grep -q 'sanitise-options' "$STUB_LOG" || false
+}
+
+@test "--wp-env prints the names it cleared (names only), and a transient or keypair raises no warning" {
+  STUB_PRESENT_OPTIONS='_transient_feed\n_site_transient_update_core\nactivitypub_keypair_for_0' run "$CHECK"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"cleared 3 locally regenerated option(s): _site_transient_update_core, _transient_feed, activitypub_keypair_for_0"* ||
+    "$output" == *"cleared 3 locally regenerated option(s): _transient_feed, _site_transient_update_core, activitypub_keypair_for_0"* ]]
+  [[ "$output" != *"WARNING"* ]]
+}
+
+@test "--wp-env warns when a cleared option is not a transient or an ActivityPub key pair" {
+  STUB_PRESENT_OPTIONS='_transient_feed\nfs_accounts' run "$CHECK"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"cleared 2 locally regenerated option(s)"* ]]
+  [[ "$output" == *"fs_accounts"* ]]
+  [[ "$output" == *"WARNING"* && "$output" == *"unsanitised data"* && "$output" == *"container pass"* ]]
+}
+
+@test "--wp-env says nothing about clearing when nothing was present" {
+  run "$CHECK"
+  [ "$status" -eq 0 ]
+  [[ "$output" != *"cleared"* ]]
+}
+
+@test "--wp-env --no-clear deletes nothing and reports a listed option as a failure" {
+  STUB_PRESENT_OPTIONS='fs_accounts' STUB_CHECK_OUTPUT='option fs_accounts' run "$CHECK" --wp-env --no-clear
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"  option fs_accounts"* ]]
+  ! grep -q 'sanitise-options' "$STUB_LOG" || false
+  ! grep -q 'present-options' "$STUB_LOG" || false
+  grep -q '^wpenv check$' "$STUB_LOG"
+}
+
+@test "--no-clear is only for --wp-env, and extra arguments are rejected" {
+  run "$CHECK" --container c1 --no-clear
+  [ "$status" -eq 2 ]
+  run "$CHECK" --no-clear
+  [ "$status" -eq 2 ]
+  run "$CHECK" --wp-env --no-clear extra
+  [ "$status" -eq 2 ]
 }
 
 @test "the check queries cover IPs in usermeta, postmeta and options, and the encoded email forms" {

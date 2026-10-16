@@ -131,6 +131,14 @@ SELECT table_name FROM information_schema.tables WHERE table_schema = DATABASE()
 SQL
 }
 
+# san_present_options <target>: the names of the listed options that exist (names only).
+san_present_options() {
+  {
+    printf '%s\n' '-- devnel-present-options'
+    printf '%s\n' "SELECT option_name FROM \`${SAN_PREFIX}options\` WHERE $(san_cond_all option_name "$SAN_DIR/options-delete.txt") ORDER BY option_name;"
+  } | san_run "$1"
+}
+
 # san_delete_options <target>: delete the options on the list (not the rest of the sanitising).
 san_delete_options() {
   {

@@ -48,5 +48,5 @@ container_removed() {
 
 # nothing_in_wpenv: the stubbed wp-env never saw an import, a search-replace or a flush.
 nothing_in_wpenv() {
-  ! grep -qE '^wp-env wp (db import|search-replace|rewrite|user|plugin)' "$STUB_LOG"
+  ! grep -qE '^wp-env wp (db import|search-replace|rewrite|user|plugin)' "$STUB_LOG" || false
 }

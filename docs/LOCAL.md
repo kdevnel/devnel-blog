@@ -20,7 +20,7 @@ After `db:pull` the local admin is `admin` / `password` (a local-only account, c
 ## Versions: what `.wp-env.json` pins and what `env:sync` pins
 
 - `.wp-env.json` (committed) pins PHP 8.4, a WordPress **release** and wordpress.org plugin zips that CI can download. These are not necessarily production's versions: this repository is public and must not record exactly what production runs.
-- `npm run env:sync` reads production's core and plugin versions **read-only** (`wp core version`, `wp plugin list --skip-update-check --fields=name,version,status --format=json`) and writes `.wp-env.override.json`, which is gitignored. wp-env merges it over `.wp-env.json`, so locally you run exactly what production runs. Apply it with `npm run env:start -- --update`.
+- `npm run env:sync` reads production's core and plugin versions **read-only** (`wp core version`, `wp plugin list --skip-update-check --skip-plugins --skip-themes --fields=name,version,status --format=json`) and writes `.wp-env.override.json`, which is gitignored. wp-env merges it over `.wp-env.json`, so locally you run exactly what production runs. Apply it with `npm run env:start -- --update`.
 - Left out of the override, with a note when you run it: plugins that must not run locally (`worker`, `post-smtp`, `updraftplus`, `nginx-cache`, `redis-cache`, `amazon-s3-and-cloudfront`) and plugins with no wordpress.org release zip (`friends-autoresolve-links`, `friends-post-collection`; the blocks they register show as unregistered locally).
 - To bump the committed set, edit the versions in `.wp-env.json`.
 
@@ -70,14 +70,14 @@ The list lives once, in `scripts/sanitise/*.txt`, and is used by both the saniti
 `scripts/check-sanitised.sh` (also `npm run db:check`, against wp-env) fails, printing table and column names but never the values, if it finds any of:
 
 - an email-shaped string that is not an `@example.test` address, in any text column of any table;
-- an IPv4 or IPv6 address in the comments tables (other than `127.0.0.1`);
+- an IPv4 or IPv6 address (other than `127.0.0.1`) in the comments, commentmeta, usermeta, postmeta and options tables;
 - a `-----BEGIN` PEM block in any text column;
 - an option, usermeta key, postmeta key or post type from the lists above;
 - a row in a table that should be empty.
 
 Because it is strict, anything the sanitiser doesn't know about, such as a new plugin that stores email addresses in a column, makes the check fail and name the table and column. That is deliberate: add a rule to `scripts/sanitise/` (and a test) rather than relaxing the check. Email addresses in post text are replaced by the sanitiser, so they don't trip it.
 
-The pull deletes the listed options once more in wp-env just before the final check: WordPress and plugins write fresh transients (and may regenerate their own keys) while the pull runs, and those hold nothing from production.
+**What `db:check` does with wp-env options.** Local WordPress regenerates transients, and ActivityPub regenerates its key pair, so listed options legitimately reappear in wp-env. In `--wp-env` mode (the default, also the last step of `db:pull`) the check therefore first looks up which listed option names are present, deletes them, and prints `cleared N locally regenerated option(s): <names>` (names only, never values). If any cleared name is not a transient (`_transient_*`, `_site_transient_*`) or an `activitypub_*keypair*` option, it also prints a WARNING: that may mean unsanitised data reached wp-env, and the authoritative check is the container pass in `db:pull`. To check a database you imported by hand without changing it, run `npm run db:check -- --wp-env --no-clear`: it deletes nothing and reports listed options as failures. `--container` mode never deletes anything.
 
 Sanitised does not mean anonymous: post and page content, comment text, names, comment author URLs, usernames and the structure of the site are the real thing. Treat `.data/` as private anyway.
 

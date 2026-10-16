@@ -15,9 +15,9 @@ setup() { pull_setup; }
 @test "never --remove-source-files, and the remote is never the destination" {
   run "$UPLOADS"
   [ "$status" -eq 0 ]
-  ! grep -q 'remove-source' "$STUB_LOG"
-  ! grep -q 'rsync .* /.* [a-z.]*:' "$STUB_LOG"
-  ! grep -q '^ssh ' "$STUB_LOG"
+  ! grep -q 'remove-source' "$STUB_LOG" || false
+  ! grep -q 'rsync .* /.* [a-z.]*:' "$STUB_LOG" || false
+  ! grep -q '^ssh ' "$STUB_LOG" || false
 }
 
 @test "the data directory is 700" {
@@ -32,7 +32,7 @@ setup() { pull_setup; }
   STUB_GIT_NOT_IGNORED=1 run "$UPLOADS"
   [ "$status" -ne 0 ]
   [[ "$output" == *"not gitignored"* ]]
-  ! grep -q '^rsync' "$STUB_LOG"
+  ! grep -q '^rsync' "$STUB_LOG" || false
 }
 
 @test "the exclude list keeps private plugin files out and everything else in (real rsync, local copy)" {

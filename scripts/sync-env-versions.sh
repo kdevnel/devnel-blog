@@ -11,6 +11,7 @@
 # Usage: scripts/sync-env-versions.sh   (then: npm run env:start -- --update)
 # Environment (mostly for tests): DEVNEL_PROD_HOST.
 set -euo pipefail
+umask 077
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PROD_HOST="${DEVNEL_PROD_HOST:-triton.devnel.com}"
@@ -29,11 +30,13 @@ note() { printf '[env:sync] %s\n' "$*" >&2; }
 # - `wp plugin list` normally refreshes the update_plugins site transient and calls api.wordpress.org
 #   (WP-CLI's plugin command runs wp_update_plugins() unless --skip-update-check, documented as "the
 #   plugin update check will be skipped"), which would write to production's database.
+#   --skip-plugins --skip-themes stop production loading every plugin and theme for a version
+#   listing (checked against wp-env: names, versions and statuses are unchanged).
 core="$(ssh "$PROD_HOST" 'cd ~/devnel.blog/public && wp core version')" || die "could not read the core version"
 core="$(printf '%s' "$core" | tr -d '[:space:]')"
 [[ "$core" =~ ^[0-9]+(\.[0-9]+){1,2}([-.][0-9A-Za-z]+)?$ ]] || die "unexpected core version output"
 
-plugins_json="$(ssh "$PROD_HOST" 'cd ~/devnel.blog/public && wp plugin list --skip-update-check --fields=name,version,status --format=json')" ||
+plugins_json="$(ssh "$PROD_HOST" 'cd ~/devnel.blog/public && wp plugin list --skip-update-check --skip-plugins --skip-themes --fields=name,version,status --format=json')" ||
   die "could not read the plugin list"
 
 rows="$(printf '%s' "$plugins_json" | node -e '

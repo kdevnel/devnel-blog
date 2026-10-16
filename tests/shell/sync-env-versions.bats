@@ -30,7 +30,7 @@ run_sync() { run "$SYNC"; }
   [[ "$output" == *"skipping worker (production only)"* ]]
   [[ "$output" == *"skipping post-smtp (production only)"* ]]
   [[ "$output" == *"skipping gh-only: no wordpress.org release zip"* ]]
-  ! grep -q 'worker\|post-smtp\|gh-only' "$REPO/.wp-env.override.json"
+  ! grep -q 'worker\|post-smtp\|gh-only' "$REPO/.wp-env.override.json" || false
 }
 
 @test "mu-plugins and drop-ins are ignored" {
@@ -40,11 +40,23 @@ run_sync() { run "$SYNC"; }
   [[ "$output" != *"unexpected"* ]]
 }
 
-@test "never writes .wp-env.json" {
-  before="$(shasum -a 256 "$REPO/.wp-env.json")"
+# sha_of <file>: SHA-256 (sha256sum on Linux, shasum on macOS).
+sha_of() {
+  if command -v sha256sum >/dev/null 2>&1; then sha256sum "$1" | cut -d' ' -f1; else shasum -a 256 "$1" | cut -d' ' -f1; fi
+}
+
+@test "the override file is mode 600 even under a permissive umask" {
+  umask 000
   run_sync
   [ "$status" -eq 0 ]
-  [ "$(shasum -a 256 "$REPO/.wp-env.json")" = "$before" ]
+  [ "$(mode_of "$REPO/.wp-env.override.json")" = 600 ]
+}
+
+@test "never writes .wp-env.json" {
+  before="$(sha_of "$REPO/.wp-env.json")"
+  run_sync
+  [ "$status" -eq 0 ]
+  [ "$(sha_of "$REPO/.wp-env.json")" = "$before" ]
 }
 
 @test "the only remote commands are the two read-only version reads" {
@@ -52,7 +64,7 @@ run_sync() { run "$SYNC"; }
   [ "$status" -eq 0 ]
   [ "$(grep -c '^ssh ' "$STUB_LOG")" -eq 2 ]
   grep -qxF 'ssh triton.devnel.com cd ~/devnel.blog/public && wp core version' "$STUB_LOG"
-  grep -qxF 'ssh triton.devnel.com cd ~/devnel.blog/public && wp plugin list --skip-update-check --fields=name,version,status --format=json' "$STUB_LOG"
+  grep -qxF 'ssh triton.devnel.com cd ~/devnel.blog/public && wp plugin list --skip-update-check --skip-plugins --skip-themes --fields=name,version,status --format=json' "$STUB_LOG"
 }
 
 @test "ssh failure: non-zero, and an existing override is left as it was" {

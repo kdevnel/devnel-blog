@@ -8,9 +8,13 @@
 #   - a non-empty table from scripts/sanitise/truncate-tables.txt
 # It prints table and column names (and list entries), never the matched values.
 #
-# Usage: scripts/check-sanitised.sh [--wp-env | --container <name>]
-#   --wp-env           (default) the wp-env development database; locally generated options
-#                      (transients and the like) are deleted first
+# Usage: scripts/check-sanitised.sh [--wp-env [--no-clear] | --container <name>]
+#   --wp-env           (default) the wp-env development database. First it deletes the listed
+#                      options that are present (local WordPress regenerates transients and
+#                      ActivityPub key pairs), printing their names and warning if any is not of
+#                      that kind: that could mean an unsanitised dump reached wp-env.
+#   --no-clear         with --wp-env: delete nothing, report listed options as failures (use this
+#                      to check a database you imported by hand)
 #   --container <name> the throwaway MySQL container that pull-db.sh sanitises in
 set -euo pipefail
 
@@ -19,17 +23,30 @@ root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 source "$root/scripts/sanitise/lib.sh"
 
 target="wpenv"
-case "${1:-}" in
-  "" | --wp-env) ;;
+clear=1
+usage="usage: check-sanitised.sh [--wp-env [--no-clear] | --container <name>]"
+if [[ $# -eq 0 ]]; then set -- --wp-env; fi
+case "$1" in
+  --wp-env)
+    shift
+    if [[ "${1:-}" == "--no-clear" ]]; then
+      clear=0
+      shift
+    fi
+    [[ $# -eq 0 ]] || {
+      san_err "$usage"
+      exit 2
+    }
+    ;;
   --container)
-    [[ -n "${2:-}" ]] || {
-      san_err "--container needs a name"
+    [[ -n "${2:-}" && $# -eq 2 ]] || {
+      san_err "--container needs exactly one name"
       exit 2
     }
     target="container:$2"
     ;;
   *)
-    san_err "usage: check-sanitised.sh [--wp-env | --container <name>]"
+    san_err "$usage"
     exit 2
     ;;
 esac
@@ -54,13 +71,26 @@ if ! grep -qx "${p}options"$'\t'"option_name" <<<"$cols"; then
 fi
 
 # In --wp-env mode, first delete the listed options again. WordPress writes fresh transients (and
-# plugins may regenerate their own keys) during normal local use; they hold nothing from production.
-# The pass over the throwaway container in pull-db.sh is the authoritative one.
-if [[ "$target" == "wpenv" ]]; then
-  san_delete_options "$target" || {
-    san_err "could not clear locally generated options"
+# ActivityPub regenerates its key pair) during normal local use; they hold nothing from production.
+# The deletion is never silent: the names are printed, and a name that is not that kind of option
+# is a warning. The pass over the throwaway container in pull-db.sh is the authoritative one.
+if [[ "$target" == "wpenv" && "$clear" == 1 ]]; then
+  present="$(san_present_options "$target")" || {
+    san_err "could not list the options to clear"
     exit 2
   }
+  if [[ -n "$present" ]]; then
+    san_delete_options "$target" || {
+      san_err "could not clear locally regenerated options"
+      exit 2
+    }
+    n="$(printf '%s\n' "$present" | wc -l | tr -d ' ')"
+    echo "cleared $n locally regenerated option(s): $(printf '%s\n' "$present" | paste -sd, - | sed 's/,/, /g')"
+    unexpected="$(printf '%s\n' "$present" | grep -Ev '^(_transient_|_site_transient_|activitypub_.*keypair)' || true)"
+    if [[ -n "$unexpected" ]]; then
+      echo "WARNING: some of those are not transients or ActivityPub key pairs. That may mean unsanitised data reached wp-env. The authoritative check is the container pass in 'npm run db:pull'; re-pull, or re-check a hand-imported database with --no-clear." >&2
+    fi
+  fi
 fi
 
 has_col() { grep -qx "$1"$'\t'"$2" <<<"$cols"; }

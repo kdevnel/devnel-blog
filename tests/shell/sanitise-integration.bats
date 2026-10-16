@@ -289,6 +289,15 @@ expect_only_count() {
   [ "$(sql "SELECT option_value FROM wp_options WHERE option_name = 'blogname'")" = "Test blog" ]
 }
 
+@test "san_present_options lists the names of listed options that exist, and nothing else" {
+  # shellcheck source=scripts/sanitise/lib.sh
+  source "$REPO_ROOT/scripts/sanitise/lib.sh"
+  sanitise
+  [ -z "$(san_present_options "container:$CONTAINER")" ]
+  sql "INSERT INTO wp_options (option_name, option_value) VALUES ('_transient_x', 'v'), ('fs_accounts', 'secret-value'), ('my_other_option', 'v')"
+  [ "$(san_present_options "container:$CONTAINER")" = $'_transient_x\nfs_accounts' ] || [ "$(san_present_options "container:$CONTAINER")" = $'fs_accounts\n_transient_x' ]
+}
+
 @test "an IP-looking version string with fewer than four parts is not an IP" {
   sanitise
   sql "UPDATE wp_comments SET comment_content = 'works on 1.2.3 and 10.5' WHERE comment_ID = 1"
