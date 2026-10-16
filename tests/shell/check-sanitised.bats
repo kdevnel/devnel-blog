@@ -41,7 +41,8 @@ setup() { pull_setup; }
   [[ "$sql" == *"DELETE FROM \`wp_options\`"* && "$sql" == *"!_transient!_%"* ]]
   [[ "$sql" != *"wp_posts"* ]]
   : >"$STUB_LOG"
-  run "$CHECK" --container c1
+  # Options present, so a clearing container mode would show up in the log.
+  STUB_PRESENT_OPTIONS='_transient_feed\nfs_accounts' run "$CHECK" --container c1
   [ "$status" -eq 0 ]
   ! grep -q 'sanitise-options' "$STUB_LOG" || false
 }

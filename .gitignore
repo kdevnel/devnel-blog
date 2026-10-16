@@ -9,6 +9,7 @@ playwright-report/
 # Made-up fixtures for the sanitiser tests (the rule above is there to keep real dumps out)
 !tests/shell/fixtures/*.sql
 .wp-env.override.json
+.wp-env.override.json.tmp.*
 .DS_Store
 .phpcs.cache
 .phpunit.result.cache
