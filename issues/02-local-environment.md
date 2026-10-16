@@ -13,6 +13,18 @@
 In: `.wp-env.json`, `.wp-env.override.json` example, pull/sanitise script, uploads sync script, npm scripts.
 Out: test suites (03), fixture content for CI (03), Redis/nginx emulation (not needed locally).
 
+## Decisions (lead, 2026-10-16)
+Kyle approved streaming the export "as long as it's secure". Where these differ from Deliverables, these win.
+
+1. **Raw production data never touches disk and never enters wp-env.** `scripts/pull-db.sh` streams `ssh triton.devnel.com 'cd ~/devnel.blog/public && wp db export - --single-transaction'` into a throwaway, isolated MySQL container (`docker run`, `--network none`, no published ports, random name, `mysql:8.4`, removed by a trap on every exit path). Sanitising is plain SQL inside that container. `scripts/check-sanitised.sh` runs against the container; on failure the script aborts with nothing imported. Only then is the sanitised DB exported to `.data/sanitised-YYYYMMDD.sql.gz` and imported into wp-env, followed by `wp search-replace` (URLs only), a permalink flush, a second `check-sanitised.sh` run against wp-env, and a summary. No raw dump file is ever written; a failure leaves wp-env untouched.
+2. **Files:** `.data/` is mode 700, `.data/*.sql.gz` mode 600 (umask 077). The last 3 sanitised snapshots are kept. The script refuses to run if `.data` is not gitignored (`git check-ignore`).
+3. **No exact production versions in git.** `.wp-env.json` pins `phpVersion: "8.4"` and a CI-usable core/plugin set (a pinned WordPress release, wordpress.org plugin zips). `scripts/sync-env-versions.sh` (`npm run env:sync`) reads production core and plugin versions read-only and writes the gitignored `.wp-env.override.json`. Documented in `docs/LOCAL.md`, Bats-tested with a stubbed ssh.
+4. **Sanitisation list** (users, usermeta, comments, commentmeta, truncated tables, deleted options, transients, plugin deactivation) is written once in `scripts/sanitise/` and used by both the sanitiser and `check-sanitised.sh`, which fails on any leftover and prints table and column names, never values.
+5. **wp-env exposure** is investigated and documented in `docs/LOCAL.md`; only sanitised data ever reaches wp-env.
+6. **Uploads sync:** `rsync -a --delete` into `.data/uploads` with the remote as source only, never `--remove-source-files`.
+7. CI runs the pipeline only with stubs; a real snapshot is never used in CI.
+8. An extra Bats test greps every new script for ssh commands and fails if a remote command could write (allowed: `wp db export -`, `wp core version`, `wp plugin list`, rsync with the remote as source).
+
 ## Deliverables
 - `.wp-env.json`: `core` pinned to the production version (`WordPress/WordPress#<prod version>`, bumped when prod moves), `phpVersion: "8.4"`, themes `./theme/devnel`, plugins from wordpress.org zips matching production (activitypub, friends, friends-autoresolve-links, friends-post-collection, akismet, redirection, syntaxhighlighter — until 13 lands), `config` with `WP_DEBUG`, `WP_DEBUG_LOG`, `SCRIPT_DEBUG`; mappings for `tools/`. Port 8888 (dev), 8889 (tests).
 - `scripts/pull-db.sh`:
