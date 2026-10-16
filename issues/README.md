@@ -7,7 +7,7 @@ One file per issue. The team lead keeps the **Status** column current (`todo` �
 | # | Issue | Wave | Depends on | Implementer | Reviewer | Human-gated | Status |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | 01 | [Repo scaffold & tooling](01-repo-scaffold.md) | 0 | — | Sonnet | Opus | — | done |
-| 02 | [Local environment mirroring production](02-local-environment.md) | 0 | 01 | Sonnet | Opus | — | todo |
+| 02 | [Local environment mirroring production](02-local-environment.md) | 0 | 01 | Sonnet | Opus | — | done |
 | 03 | [Test harness](03-test-harness.md) | 0 | 01, 02 | Sonnet | Opus | — | todo |
 | 04 | [Design tokens, fonts, dark mode](04-design-tokens.md) | 1 | 03 | **Opus** | Opus | — | todo |
 | 05 | [Templates & template parts](05-templates.md) | 1 | 04 | Sonnet | Opus | — | todo |
@@ -32,7 +32,7 @@ One file per issue. The team lead keeps the **Status** column current (`todo` �
 _The lead adds each one here with its issue number and the exact commands while it waits for Kyle._
 
 - **#18:** `docs/runbooks/backup-cleanup.md` phase 2 around 2026-10-29, after two weekly restore-test passes (2026-10-19 and 2026-10-26).
-- **#18 (needs 02):** the wp-env restore rehearsal in `docs/runbooks/restore.md` 3A.
+- **#18:** the wp-env restore rehearsal in `docs/runbooks/restore.md` 3A (unblocked: 02 is done; local only, not human-gated).
 
 ## Issue template
 

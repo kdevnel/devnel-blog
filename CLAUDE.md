@@ -33,7 +33,10 @@ This repo is the devnel.blog WordPress block theme and its operations tooling. R
 ```sh
 npm ci && composer install
 npm run env:start        # wp-env on http://localhost:8888 (tests on :8889)
+npm run env:sync         # pin wp-env to production's core/plugin versions (gitignored override; read-only on prod)
 npm run db:pull          # sanitised production snapshot into wp-env (issue 02)
+npm run db:check         # re-check wp-env for leftover PII/secrets (--wp-env --no-clear for a hand-imported DB)
+npm run uploads:pull     # copy production uploads into .data/uploads (read-only on prod; private plugin dirs excluded)
 npm run check            # everything CI runs: lint, phpcs, phpstan, stylelint, phpunit, e2e, axe, contrast, bats
 npm run lighthouse       # Lighthouse against LH_BASE (default the wp-env URL)
 ```
