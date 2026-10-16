@@ -5,6 +5,13 @@
 # siteurl with production, then drops the scratch database (always, via a trap).
 # With --offsite the dump is fetched from the off-site remote instead of the local disk.
 #
+# Memory protection (the import can raise MySQL server memory; this runs from cron with no one
+# watching). "Headroom" is MemAvailable + SwapFree from ${MEMINFO_FILE:-/proc/meminfo}.
+#   RESTORE_MIN_MEM_MB=1536       refuse to start below this headroom (0 = no pre-check)
+#   RESTORE_ABORT_MEM_MB=512      kill the import if headroom falls below this (0 = no watchdog)
+#   RESTORE_MEM_POLL_SECONDS=2    how often the import is checked
+# The abort floor must be below the start threshold when both are set.
+#
 # The production database is protected twice: the scratch name and the MySQL user are different
 # (the user has no grants on production), and the guards below refuse to run otherwise.
 set -Eeuo pipefail
@@ -22,6 +29,7 @@ if [[ -z "$SITE" || ( "$MODE" != "local" && "$MODE" != "--offsite" ) ]]; then
 fi
 
 STARTED=0
+IMPORT_PID=""
 SCRATCH_ARMED=0
 SCRATCH_DB=""
 WORKDIR=""
@@ -38,6 +46,10 @@ drop_scratch() {
 on_exit() {
   local rc=$?
   trap - EXIT ERR
+  if [[ -n "$IMPORT_PID" ]]; then
+    kill_tree "$IMPORT_PID" KILL
+    wait "$IMPORT_PID" 2>/dev/null || true
+  fi
   drop_scratch
   [[ -z "$WORKDIR" ]] || rm -rf -- "$WORKDIR"
   if [[ $rc -ne 0 && $STARTED -eq 1 ]]; then
@@ -49,12 +61,24 @@ on_exit() {
   exit "$rc"
 }
 trap on_exit EXIT
+trap 'exit 143' TERM INT HUP
 
 load_config "$SITE"
 STARTED=1
 : "${RESTORE_DEFAULTS_FILE:?RESTORE_DEFAULTS_FILE is not set in the site config}"
 : "${RESTORE_POSTS_TOLERANCE:=0}"
 is_uint "$RESTORE_POSTS_TOLERANCE" || die "RESTORE_POSTS_TOLERANCE must be a non-negative integer"
+: "${RESTORE_MIN_MEM_MB:=1536}"
+: "${RESTORE_ABORT_MEM_MB:=512}"
+: "${RESTORE_MEM_POLL_SECONDS:=2}"
+is_uint "$RESTORE_MIN_MEM_MB" || die "RESTORE_MIN_MEM_MB must be a non-negative integer"
+is_uint "$RESTORE_ABORT_MEM_MB" || die "RESTORE_ABORT_MEM_MB must be a non-negative integer"
+if ! is_uint "$RESTORE_MEM_POLL_SECONDS" || [[ "$RESTORE_MEM_POLL_SECONDS" -lt 1 ]]; then
+  die "RESTORE_MEM_POLL_SECONDS must be a positive integer"
+fi
+if [[ "$RESTORE_MIN_MEM_MB" -ne 0 && "$RESTORE_ABORT_MEM_MB" -ne 0 && "$RESTORE_ABORT_MEM_MB" -ge "$RESTORE_MIN_MEM_MB" ]]; then
+  die "RESTORE_ABORT_MEM_MB ($RESTORE_ABORT_MEM_MB) must be less than RESTORE_MIN_MEM_MB ($RESTORE_MIN_MEM_MB)"
+fi
 require_private_file "$RESTORE_DEFAULTS_FILE" "restore defaults file"
 
 wp_site() { "$WP_BIN" --path="$SITE_ROOT" "$@"; }
@@ -125,10 +149,60 @@ datadir="${MYSQL_DATADIR:-$(rt_mysql -N -B -e 'SELECT @@datadir')}"
 [[ -n "$datadir" ]] || die "could not determine the MySQL data directory (set MYSQL_DATADIR)"
 check_free_space "$datadir" "$dump_kb" "$RESTORE_MIN_FREE_FACTOR" "restore test"
 
+# --- Memory guard: the import raises MySQL server memory, which production shares. ---
+START_MEM=""
+if [[ "$RESTORE_MIN_MEM_MB" -ne 0 ]]; then
+  START_MEM="$(mem_headroom_mb)" ||
+    die "cannot read MemAvailable and SwapFree from ${MEMINFO_FILE:-/proc/meminfo}; refusing to run the restore test without a memory check"
+  log "memory headroom at start: ${START_MEM} MB (RAM + swap), ${RESTORE_MIN_MEM_MB} MB required"
+  [[ "$START_MEM" -ge "$RESTORE_MIN_MEM_MB" ]] ||
+    die "not enough free memory for restore test: ${START_MEM} MB available (RAM + swap), ${RESTORE_MIN_MEM_MB} MB required"
+else
+  log "memory pre-check disabled (RESTORE_MIN_MEM_MB=0)"
+fi
+LOWEST_MEM="$START_MEM"
+
+# import_with_watchdog: run the import in the background and poll memory headroom from this
+# shell while it runs, so there is no separate watchdog process that could outlive the script.
+# The import and everything it spawned are killed if headroom drops below RESTORE_ABORT_MEM_MB.
+import_with_watchdog() {
+  local rc=0 tick=0 ticks_per_poll=$((RESTORE_MEM_POLL_SECONDS * 10)) now
+  (gzip -dc "$DUMP" | rt_mysql --default-character-set=utf8mb4 "$SCRATCH_DB") &
+  IMPORT_PID=$!
+  if [[ "$RESTORE_ABORT_MEM_MB" -ne 0 ]]; then
+    while kill -0 "$IMPORT_PID" 2>/dev/null; do
+      if [[ $((tick % ticks_per_poll)) -eq 0 ]]; then
+        if ! now="$(mem_headroom_mb)"; then
+          FAIL_MSG="import aborted: cannot read MemAvailable and SwapFree from ${MEMINFO_FILE:-/proc/meminfo}"
+        else
+          if [[ -z "$LOWEST_MEM" || "$now" -lt "$LOWEST_MEM" ]]; then LOWEST_MEM="$now"; fi
+          if [[ "$now" -lt "$RESTORE_ABORT_MEM_MB" ]]; then
+            FAIL_MSG="import aborted: memory headroom fell to ${now} MB (floor ${RESTORE_ABORT_MEM_MB} MB)"
+          fi
+        fi
+        if [[ -n "$FAIL_MSG" ]]; then
+          log "ERROR: $FAIL_MSG; killing the import"
+          kill_tree "$IMPORT_PID" TERM
+          for _ in $(seq 1 50); do kill -0 "$IMPORT_PID" 2>/dev/null || break; sleep 0.1; done
+          kill_tree "$IMPORT_PID" KILL
+          wait "$IMPORT_PID" 2>/dev/null || true
+          IMPORT_PID=""
+          exit 1
+        fi
+      fi
+      tick=$((tick + 1))
+      sleep 0.1
+    done
+  fi
+  wait "$IMPORT_PID" || rc=$?
+  IMPORT_PID=""
+  return "$rc"
+}
+
 # --- Restore into the scratch database. ---
 SCRATCH_ARMED=1
 rt_mysql -e "DROP DATABASE IF EXISTS \`$SCRATCH_DB\`; CREATE DATABASE \`$SCRATCH_DB\` CHARACTER SET utf8mb4"
-gzip -dc "$DUMP" | rt_mysql --default-character-set=utf8mb4 "$SCRATCH_DB"
+import_with_watchdog
 
 # --- Compare with production (read-only queries through wp db query). ---
 scratch_q() { rt_mysql -N -B "$SCRATCH_DB" -e "$1"; }
@@ -162,5 +236,10 @@ fi
 
 drop_scratch
 SCRATCH_ARMED=0
+if [[ "$RESTORE_ABORT_MEM_MB" -ne 0 && -n "$LOWEST_MEM" ]]; then
+  log "memory headroom: ${START_MEM:-n/a} MB at start, lowest ${LOWEST_MEM} MB during import (abort floor ${RESTORE_ABORT_MEM_MB} MB)"
+else
+  log "memory headroom: ${START_MEM:-not measured} MB at start, import not monitored"
+fi
 log "restore test passed ($(basename "$DUMP"), $s_tables tables, $s_pub published)"
 ping_hc "$RESTORE_HEARTBEAT_URL"

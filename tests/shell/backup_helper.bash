@@ -27,6 +27,14 @@ backup_setup() {
   printf '[client]\nuser=restore\npassword="s3cret-restore-pw"\n' >"$BATS_TEST_TMPDIR/restore.my.cnf"
   chmod 600 "$BATS_TEST_TMPDIR/prod.my.cnf" "$BATS_TEST_TMPDIR/restore.my.cnf"
   write_config
+  export MEMINFO_FILE="$BATS_TEST_TMPDIR/meminfo"
+  write_meminfo 8192 0
+}
+
+# write_meminfo <MemAvailable MB> <SwapFree MB>: fake /proc/meminfo for the restore-test memory guard.
+write_meminfo() {
+  printf 'MemTotal:       16000000 kB\nMemFree:          100000 kB\nMemAvailable:   %d kB\nSwapTotal:       4000000 kB\nSwapFree:       %d kB\n' \
+    $(($1 * 1024)) $(($2 * 1024)) >"$MEMINFO_FILE"
 }
 
 write_config() { # extra lines may be passed as arguments

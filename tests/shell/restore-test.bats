@@ -191,3 +191,127 @@ big_dump() { # big_dump <file>: about 2 MB uncompressed
   [ "$status" -eq 0 ]
   grep -q '^df -Pk /srv/mysql' "$STUB_LOG"
 }
+
+# --- Memory guard ---
+
+no_scratch_sql() { ! grep -q 'CREATE DATABASE\|DROP DATABASE\|mysql IMPORT' "$STUB_LOG"; }
+failed_with_alert() {
+  grep -q 'ALERT subject=\[devnel-backup\] RESTORE TEST FAILED' "$STUB_LOG"
+  grep -q 'restore-uuid/fail' "$STUB_LOG"
+}
+
+@test "memory: low headroom at the pre-check fails before any scratch SQL, with alert and /fail" {
+  write_meminfo 1000 400
+  run_rt
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"not enough free memory for restore test: 1400 MB available (RAM + swap), 1536 MB required"* ]]
+  no_scratch_sql
+  failed_with_alert
+}
+
+@test "memory: enough headroom passes, counting swap, and logs the headroom line" {
+  write_meminfo 1000 600
+  run_rt
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"memory headroom at start: 1600 MB"* ]]
+  [[ "$output" == *"memory headroom: 1600 MB at start, lowest 1600 MB during import"* ]]
+}
+
+@test "memory: the start threshold is configurable" {
+  write_meminfo 3000 0
+  write_config "RESTORE_MIN_MEM_MB=4000" "RESTORE_ABORT_MEM_MB=100"
+  run_rt
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"3000 MB available (RAM + swap), 4000 MB required"* ]]
+  write_config "RESTORE_MIN_MEM_MB=2500" "RESTORE_ABORT_MEM_MB=100"
+  run_rt
+  [ "$status" -eq 0 ]
+}
+
+@test "memory: RESTORE_MIN_MEM_MB=0 skips the pre-check" {
+  write_meminfo 10 0
+  write_config "RESTORE_MIN_MEM_MB=0" "RESTORE_ABORT_MEM_MB=0"
+  run_rt
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"memory pre-check disabled"* ]]
+}
+
+@test "memory: unreadable meminfo fails closed before any scratch SQL" {
+  rm -f "$MEMINFO_FILE"
+  run_rt
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"cannot read MemAvailable and SwapFree"* ]]
+  no_scratch_sql
+  failed_with_alert
+}
+
+@test "memory: meminfo without the fields fails closed before any scratch SQL" {
+  printf 'MemTotal: 16000000 kB\nMemAvailable: 9000000 kB\n' >"$MEMINFO_FILE"
+  run_rt
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"cannot read MemAvailable and SwapFree"* ]]
+  no_scratch_sql
+}
+
+@test "memory: invalid settings are rejected before any SQL" {
+  write_config "RESTORE_MIN_MEM_MB=lots"
+  run_rt
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"RESTORE_MIN_MEM_MB must be a non-negative integer"* ]]
+  write_config "RESTORE_ABORT_MEM_MB=-5"
+  run_rt
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"RESTORE_ABORT_MEM_MB must be a non-negative integer"* ]]
+  write_config "RESTORE_MEM_POLL_SECONDS=0"
+  run_rt
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"RESTORE_MEM_POLL_SECONDS must be a positive integer"* ]]
+  write_config "RESTORE_MIN_MEM_MB=500" "RESTORE_ABORT_MEM_MB=500"
+  run_rt
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"must be less than RESTORE_MIN_MEM_MB"* ]]
+  no_scratch_sql
+}
+
+@test "memory: a zero abort floor is allowed with any start threshold" {
+  write_config "RESTORE_MIN_MEM_MB=500" "RESTORE_ABORT_MEM_MB=0"
+  run_rt
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"import not monitored"* ]]
+}
+
+@test "watchdog: low memory during the import kills it, fails with the reason, and still drops the scratch DB" {
+  write_config "RESTORE_MEM_POLL_SECONDS=1"
+  export STUB_MYSQL_IMPORT_SLEEP=30 STUB_MYSQL_PIDFILE="$BATS_TEST_TMPDIR/import.pids"
+  export STUB_MYSQL_IMPORT_MEMINFO="$MEMINFO_FILE"
+  export STUB_MYSQL_IMPORT_MEMINFO_TEXT='MemAvailable: 204800 kB\nSwapFree: 102400 kB\n'
+  local start=$SECONDS
+  run_rt
+  [ "$status" -ne 0 ]
+  [ $((SECONDS - start)) -lt 15 ]
+  [[ "$output" == *"import aborted: memory headroom fell to 300 MB (floor 512 MB)"* ]]
+  [ "$(grep -c 'DROP DATABASE IF EXISTS `devnel_blog_restoretest`' "$STUB_LOG")" -ge 2 ]
+  failed_with_alert
+  grep -q 'ALERT .*body=import aborted: memory headroom fell to 300 MB' "$STUB_LOG"
+  # the stub and its sleep were killed, nothing is left running
+  read -r stub_pid sleep_pid <"$STUB_MYSQL_PIDFILE"
+  ! kill -0 "$stub_pid" 2>/dev/null
+  ! kill -0 "$sleep_pid" 2>/dev/null
+}
+
+@test "watchdog: a normal import is not failed by watchdog teardown and logs the lowest headroom" {
+  write_meminfo 2000 100
+  write_config "RESTORE_MEM_POLL_SECONDS=1"
+  run_rt
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"memory headroom: 2100 MB at start, lowest 2100 MB during import (abort floor 512 MB)"* ]]
+  ! grep -q 'restore-uuid/fail' "$STUB_LOG"
+  grep -q 'curl https://hc.example.test/ping/restore-uuid$' "$STUB_LOG"
+}
+
+@test "watchdog: an import that fails by itself still fails with its own error" {
+  STUB_MYSQL_IMPORT_RC=1 run_rt
+  [ "$status" -ne 0 ]
+  [[ "$output" != *"import aborted"* ]]
+  failed_with_alert
+}

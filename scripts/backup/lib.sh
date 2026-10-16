@@ -105,6 +105,26 @@ check_free_space() {
   [[ $avail_kb -ge $need_kb ]] || die "not enough free disk for $what: ${avail_kb} KB free, need ${need_kb} KB"
 }
 
+# mem_headroom_mb: print MemAvailable + SwapFree in whole MB from ${MEMINFO_FILE:-/proc/meminfo}.
+# Returns 1 (printing nothing) if the file is unreadable or either field is missing or not a number.
+mem_headroom_mb() {
+  local f="${MEMINFO_FILE:-/proc/meminfo}"
+  [[ -r "$f" ]] || return 1
+  awk '
+    $1 == "MemAvailable:" { a = $2; ha = 1 }
+    $1 == "SwapFree:" { s = $2; hs = 1 }
+    END {
+      if (ha && hs && a ~ /^[0-9]+$/ && s ~ /^[0-9]+$/) { printf "%d\n", (a + s) / 1024 } else { exit 1 }
+    }' "$f" 2>/dev/null
+}
+
+# kill_tree <pid> [signal]: signal a process and all its descendants (children first). Never fails.
+kill_tree() {
+  local pid="$1" sig="${2:-TERM}" child
+  for child in $(pgrep -P "$pid" 2>/dev/null || true); do kill_tree "$child" "$sig"; done
+  kill "-$sig" "$pid" 2>/dev/null || true
+}
+
 # Healthchecks API: <url>/start, <url>, <url>/fail. A failed ping never fails the job.
 ping_hc() {
   local url="$1" suffix="${2:-}" body="${3:-}"
