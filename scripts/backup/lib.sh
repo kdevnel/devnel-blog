@@ -118,11 +118,25 @@ mem_headroom_mb() {
     }' "$f" 2>/dev/null
 }
 
-# kill_tree <pid> [signal]: signal a process and all its descendants (children first). Never fails.
-kill_tree() {
-  local pid="$1" sig="${2:-TERM}" child
-  for child in $("${PGREP_BIN:-pgrep}" -P "$pid" 2>/dev/null || true); do kill_tree "$child" "$sig"; done
-  kill "-$sig" "$pid" 2>/dev/null || true
+# tree_pids <pid>: print the process and all its descendants, parents first. Never fails.
+tree_pids() {
+  local child
+  echo "$1"
+  for child in $("${PGREP_BIN:-pgrep}" -P "$1" 2>/dev/null || true); do tree_pids "$child"; done
+}
+
+# signal_pids <signal> <pid>...: send a signal to each pid. Never fails.
+signal_pids() {
+  local sig="$1" pid
+  shift
+  for pid in "$@"; do kill "-$sig" "$pid" 2>/dev/null || true; done
+}
+
+# any_alive <pid>...: succeed if at least one of the pids is still running.
+any_alive() {
+  local pid
+  for pid in "$@"; do if kill -0 "$pid" 2>/dev/null; then return 0; fi; done
+  return 1
 }
 
 # Healthchecks API: <url>/start, <url>, <url>/fail. A failed ping never fails the job.

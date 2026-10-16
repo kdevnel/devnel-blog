@@ -30,6 +30,9 @@ fi
 
 STARTED=0
 IMPORT_PID=""
+# Snapshot of the import's process tree, taken before it is signalled: killing the parent
+# reparents any survivors, so the tree can't be rediscovered from IMPORT_PID afterwards.
+IMPORT_TREE=()
 SCRATCH_ARMED=0
 SCRATCH_DB=""
 WORKDIR=""
@@ -49,7 +52,9 @@ on_exit() {
   trap '' TERM INT HUP
   trap - EXIT ERR
   if [[ -n "$IMPORT_PID" ]]; then
-    kill_tree "$IMPORT_PID" KILL
+    # shellcheck disable=SC2207 # pids are plain integers
+    IMPORT_TREE+=($(tree_pids "$IMPORT_PID"))
+    signal_pids KILL "${IMPORT_TREE[@]}"
     wait "$IMPORT_PID" 2>/dev/null || true
   fi
   drop_scratch
@@ -197,9 +202,11 @@ import_with_watchdog() {
         fi
         if [[ -n "$FAIL_MSG" ]]; then
           log "ERROR: $FAIL_MSG; killing the import"
-          kill_tree "$IMPORT_PID" TERM
-          for _ in $(seq 1 50); do kill -0 "$IMPORT_PID" 2>/dev/null || break; sleep 0.1; done
-          kill_tree "$IMPORT_PID" KILL
+          # shellcheck disable=SC2207 # pids are plain integers
+          IMPORT_TREE=($(tree_pids "$IMPORT_PID"))
+          signal_pids TERM "${IMPORT_TREE[@]}"
+          for _ in $(seq 1 50); do any_alive "${IMPORT_TREE[@]}" || break; sleep 0.1; done
+          signal_pids KILL "${IMPORT_TREE[@]}"
           wait "$IMPORT_PID" 2>/dev/null || true
           IMPORT_PID=""
           exit 1

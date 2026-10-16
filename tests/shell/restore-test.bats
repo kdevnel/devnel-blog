@@ -484,4 +484,8 @@ send_signal_during_import() {
   wait "$pid" || rc=$?
   [ "$rc" -eq 143 ]
   grep -q 'ALERT .*body=import aborted: memory headroom fell to 200 MB (floor 512 MB); then interrupted by signal TERM' "$STUB_LOG"
+  # the TERM-ignoring import (stub and its sleep) must not survive the script
+  read -r stub_pid sleep_pid <"$STUB_MYSQL_PIDFILE"
+  ! kill -0 "$stub_pid" 2>/dev/null || false
+  ! kill -0 "$sleep_pid" 2>/dev/null || false
 }
