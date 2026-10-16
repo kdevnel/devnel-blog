@@ -139,7 +139,7 @@ If you prefer the current upstream release, download the `.deb` from the rclone 
    ```sh
    echo "ok $(date -u +%FT%TZ)" | rclone rcat devnel-crypt:devnel.blog/test.txt
    rclone cat devnel-crypt:devnel.blog/test.txt
-   rclone lsf devnel-drive:devnel-backups/devnel.blog   # names should look like gibberish (encrypted)
+   rclone lsf -R devnel-drive:devnel-backups   # directory and file names should look like gibberish (crypt encrypts both)
    rclone delete --drive-use-trash=false devnel-crypt:devnel.blog/test.txt
    ```
 5. Set `OFFSITE_REMOTE='devnel-crypt:devnel.blog'` in `~/.config/devnel-backup/devnel.blog.env`.
@@ -174,6 +174,14 @@ Also prove alerting once: in Healthchecks, trigger a failure on one check (or pa
 
 ## 8. First restore test
 
+**Check memory first.** Importing the dump raises MySQL's memory use for the length of the import. On a small server with no swap this can make the kernel OOM killer kill the *production* `mysqld` (it happened on the first install; see `../devnel-ops`, known problem 8). Before running:
+
+```sh
+free -m          # the swap line must not be 0; if it is, add swap first (a human-gated step)
+```
+
+During the first run, watch `free -m` from a second shell and stop the test (Ctrl-C; the trap drops the scratch DB) if available memory plus free swap gets low.
+
 ```sh
 ~/scripts/devnel-backup/restore-test.sh devnel.blog
 ~/scripts/devnel-backup/restore-test.sh devnel.blog --offsite
@@ -183,24 +191,42 @@ Both must end with `restore test passed` and counts matching production. The scr
 
 ## 9. Cron: replace only the devnel.blog backup line
 
+Install in two parts, each approved separately: **9a** the backup lines, **9b** the restore-test lines. Don't do 9b until both step 8 runs have passed *and* the installed `restore-test.sh` has the memory guard (`RESTORE_MIN_MEM_MB`); a cron run has nobody watching memory.
+
+### 9a. Backup lines
+
 ```sh
-crontab -l > ~/crontab.before-backups-$(date +%F)          # keep this backup
+BEFORE=~/crontab.before-backups-$(date +%F-%H%M%S)
+crontab -l > "$BEFORE"                                     # keep this backup; note the file name
 crontab -l | grep -vF 'cd /home/kyle/devnel.blog/public/; /home/kyle/scripts/backup.sh' > ~/crontab.new
 # Expect exactly one line fewer than before:
-wc -l ~/crontab.before-backups-* ~/crontab.new
-# Append the new entries (from deploy/cron/backup.cron; paste its contents):
-cat >> ~/crontab.new   # paste deploy/cron/backup.cron, then Ctrl-D
-diff ~/crontab.before-backups-* ~/crontab.new               # review: one '<' line removed, the new block added, nothing else
+wc -l "$BEFORE" ~/crontab.new
+# Append the two backup entries from deploy/cron/backup.cron (daily DB, weekly files), not the restore-test lines:
+cat >> ~/crontab.new   # paste them, then Ctrl-D
+diff "$BEFORE" ~/crontab.new               # review: one '<' line removed, the new lines added, nothing else
 ```
 
-The removed line is the legacy devnel.blog entry (`0 5 * * 0 cd /home/kyle/devnel.blog/public/; /home/kyle/scripts/backup.sh >/dev/null 2>&1`). The other site's `backup.sh` line (cd into a different site) and the WP-Cron lines must show as unchanged. When the diff is right:
+The removed line is the legacy devnel.blog entry (`0 5 * * 0 cd /home/kyle/devnel.blog/public/; /home/kyle/scripts/backup.sh  >/dev/null 2>&1`). The other site's `backup.sh` line (cd into a different site) and the WP-Cron lines must show as unchanged. When the diff is right:
 
 ```sh
 crontab ~/crontab.new && crontab -l
 rm ~/crontab.new
 ```
 
-Rollback: `crontab ~/crontab.before-backups-<date>`.
+Rollback: `crontab "$BEFORE"` (the file name printed above).
+
+### 9b. Restore-test lines
+
+```sh
+BEFORE=~/crontab.before-restoretest-$(date +%F-%H%M%S)
+crontab -l > "$BEFORE"
+crontab -l > ~/crontab.new
+cat >> ~/crontab.new   # paste the two restore-test entries from deploy/cron/backup.cron, then Ctrl-D
+diff "$BEFORE" ~/crontab.new               # review: only the two new lines added
+crontab ~/crontab.new && crontab -l && rm ~/crontab.new
+```
+
+Rollback: `crontab "$BEFORE"`.
 
 ## 10. Afterwards
 
