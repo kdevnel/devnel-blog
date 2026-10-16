@@ -58,7 +58,7 @@ Also: **3 items in classic-editor format**; shortcodes `[jetpack_subscription_fo
 
 | Read-only (allowed) | Human-gated (write a runbook step, wait for Kyle) |
 | --- | --- |
-| `wp core version`, `wp core check-update` (without `--force-check`), `wp plugin list --skip-update-check` (plain `wp plugin list` refreshes the `update_plugins` transient: a DB write and a request to wordpress.org), `wp option get`, `wp post list`, `wp cron event list`, `wp eval-file -` scripts that only read | `wp core update`, `wp plugin update/install/delete`, `wp theme activate`, `wp option update`, `wp search-replace`, any content migration |
+| `wp core version`, `wp core check-update` (without `--force-check`), `wp plugin list --skip-update-check` and `wp theme list --skip-update-check` (without the flag they refresh the `update_plugins` / `update_themes` transient: a DB write and a request to wordpress.org), `wp option get`, `wp post list`, `wp cron event list`, `wp eval-file -` scripts that only read | `wp core update`, `wp plugin update/install/delete`, `wp theme activate`, `wp option update`, `wp search-replace`, any content migration |
 | `cat`/`ls`/`grep` on config and logs | Editing nginx config, `nginx -s reload`, crontab, wp-config.php, mu-plugins |
 | `wp db export /tmp/x.sql` then `scp` off and delete it | Deleting backups, restoring a DB |
 | `curl -sI https://devnel.blog/...` | Purging the page cache on production (allowed **within** an approved deploy) |
