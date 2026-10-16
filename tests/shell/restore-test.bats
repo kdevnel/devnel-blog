@@ -411,7 +411,9 @@ failed_with_alert() {
 
 @test "watchdog: the lowest headroom seen during the import is logged" {
   write_config "RESTORE_MEM_POLL_SECONDS=1"
-  export STUB_MYSQL_IMPORT_SLEEP=2 STUB_MYSQL_PIDFILE="$BATS_TEST_TMPDIR/import.pids"
+  # The import must outlast at least one poll after the stub lowers meminfo. The poll loop counts
+  # 0.1 s ticks, which stretch on a loaded machine, so 2 s was flaky; 5 s leaves room.
+  export STUB_MYSQL_IMPORT_SLEEP=5 STUB_MYSQL_PIDFILE="$BATS_TEST_TMPDIR/import.pids"
   export STUB_MYSQL_IMPORT_MEMINFO="$MEMINFO_FILE"
   export STUB_MYSQL_IMPORT_MEMINFO_TEXT='MemAvailable: 921600 kB\nSwapFree: 0 kB\n'
   run_rt
@@ -492,15 +494,16 @@ send_signal_during_import() {
 
 @test "watchdog: escalates to KILL by itself when the import ignores TERM (no signal to the script)" {
   write_config "RESTORE_MEM_POLL_SECONDS=1"
-  export STUB_MYSQL_IMPORT_SLEEP=30 STUB_MYSQL_PIDFILE="$BATS_TEST_TMPDIR/import.pids"
+  export STUB_MYSQL_IMPORT_SLEEP=90 STUB_MYSQL_PIDFILE="$BATS_TEST_TMPDIR/import.pids"
   export STUB_MYSQL_IGNORE_TERM=1
   export STUB_MYSQL_IMPORT_MEMINFO="$MEMINFO_FILE"
   export STUB_MYSQL_IMPORT_MEMINFO_TEXT='MemAvailable: 204800 kB\nSwapFree: 0 kB\n'
   local start=$SECONDS
   run "$RESTORE_SH" test
   # `run` holds the output pipe open until every child exits, so a surviving import would
-  # keep this waiting for the stub's 30 s sleep: the time bound is what proves the KILL.
-  [ $((SECONDS - start)) -lt 15 ]
+  # keep this waiting for the stub's 90 s sleep: the time bound is what proves the KILL. The
+  # TERM->KILL wait counts 0.1 s ticks (about 5 s, longer on a loaded machine), hence 40 s.
+  [ $((SECONDS - start)) -lt 40 ]
   [ "$status" -eq 1 ]
   [[ "$output" == *"import aborted: memory headroom fell to 200 MB (floor 512 MB)"* ]] || false
   [ "$(grep -c 'DROP DATABASE IF EXISTS `devnel_blog_restoretest`' "$STUB_LOG")" -ge 2 ]
