@@ -38,11 +38,11 @@ Kyle approved streaming the export "as long as it's secure". Where these differ 
 - `docs/LOCAL.md`: setup, the sanitisation guarantee, how to refresh.
 
 ## Acceptance criteria
-- [ ] `npm run env:start` → site at http://localhost:8888 with the `devnel` theme available, PHP 8.4 and the production WP version (`wp core version`).
-- [ ] `npm run db:pull` imports real content; post/page/comment counts match the current production counts.
-- [ ] After a pull, no real email addresses, IPs or plugin secrets remain: a check script (`scripts/check-sanitised.sh`) greps the local DB for `@` outside `example.test`, known option names and IP patterns, and fails if it finds any.
-- [ ] Nothing in the pull path writes to production (only `wp db export -` to stdout).
-- [ ] `.data/` is gitignored and nothing from it is committed.
+- [x] `npm run env:start` → site at http://localhost:8888 with the `devnel` theme available, PHP 8.4 and the production WP version (`wp core version`).
+- [x] `npm run db:pull` imports real content; post/page/comment counts match the current production counts.
+- [x] After a pull, no real email addresses, IPs or plugin secrets remain: a check script (`scripts/check-sanitised.sh`) greps the local DB for `@` outside `example.test`, known option names and IP patterns, and fails if it finds any.
+- [x] Nothing in the pull path writes to production (only `wp db export -` to stdout).
+- [x] `.data/` is gitignored and nothing from it is committed.
 
 ## Tests required
 - Bats test for `pull-db.sh` with stubbed `ssh` and `wp-env` covering: the stream pipeline, the search-replace arguments, sanitise SQL run, and failure when ssh fails (non-zero exit, no partial import).
@@ -78,3 +78,17 @@ Noted for later:
 - wp-env publishes its ports on all interfaces and has no setting to change that (see `docs/LOCAL.md`).
 - `friends-autoresolve-links` and `friends-post-collection` have no wordpress.org zip, so they are not installed locally.
 - `CLAUDE.md`'s command list could mention `env:sync`, `db:check` and `uploads:pull` (not edited here).
+
+### Done (lead, 2026-10-16)
+Merged in #8 after three independent Opus review rounds (r1 changes needed, r2 pass, r3 pass; details in the PR). Evidence for the criteria:
+- **env:start:** wp-env with the `devnel` theme and PHP 8.4. Production's core version comes from `env:sync`'s gitignored override (decision 3).
+- **Counts:** the real `db:pull` against production showed matching published post, page and comment counts. The numbers aren't recorded here.
+- **Sanitised:** `check-sanitised.sh` passed in the isolated container and in wp-env. The reviewer also loaded the snapshot into a fresh no-network container: OK.
+- **Read-only:** the only remote commands are `wp db export -`, `wp core version` and `wp plugin list --skip-update-check --skip-plugins --skip-themes`, plus rsync from production. `tests/shell/ssh-readonly.bats` is the tripwire.
+- **`.data/`:** gitignored, and refused if not ignored.
+
+Follow-ups from the reviews (nits, not done):
+- `check-sanitised.sh` scans only char/varchar/text columns; a future JSON or BLOB column would be skipped.
+- Options rely on the explicit list (no name-pattern net like usermeta's `%token%`).
+- The `WP_ENV` variable name collides with Bedrock's convention. It fails closed.
+- Local Bats under macOS `/bin/bash` 3.2 doesn't enforce mid-test `[[ ]]` assertions; CI on Ubuntu does. Consider `brew install bash`.
