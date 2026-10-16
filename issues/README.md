@@ -23,7 +23,7 @@ One file per issue. The team lead keeps the **Status** column current (`todo` �
 | 15 | [Pre-launch housekeeping](15-prelaunch-housekeeping.md) | 3 | 19 | Haiku | Sonnet | all of it | todo |
 | 16 | [Launch](16-launch.md) | 3 | 07, 09–15, 18, 19 | Lead | Opus | all of it | todo |
 | 17 | [Ongoing maintenance automation](17-maintenance-automation.md) | 3 | 16 | Sonnet | Opus | — | todo |
-| 18 | [Reliable backups](18-backups.md) | R | — | Sonnet | Opus | cron + cleanup | in progress (merged; Triton install pending) |
+| 18 | [Reliable backups](18-backups.md) | R | — | Sonnet | Opus | cron + cleanup | in progress (installed on Triton; restore-test cron and cleanup phase 2 pending) |
 | 19 | [Safe auto-updater](19-safe-updater.md) | R | 18 (20 for majors) | **Opus** | Opus | cron, mu-plugin, first run | todo |
 | 20 | [Update canary in CI](20-update-canary.md) | R | 03, 05 | Sonnet | Opus | — | todo |
 
@@ -31,7 +31,7 @@ One file per issue. The team lead keeps the **Status** column current (`todo` �
 
 _The lead adds each one here with its issue number and the exact commands while it waits for Kyle._
 
-- **#18:** install on Triton, following `docs/runbooks/backup-install.md` steps 1–9, one step at a time with Kyle's approval: Healthchecks checks, copy the scripts, the restore-test MySQL user and mode-600 credentials files, the site config, install rclone, `rclone config` (Kyle only), the first manual run and restore tests, replacing only the devnel.blog crontab line. Then `docs/runbooks/backup-cleanup.md` phase 1 after the first verified backup, and phase 2 after two weeks.
+- **#18:** step 9b of `docs/runbooks/backup-install.md` (restore-test cron lines), after the memory-guard PR lands and the updated `restore-test.sh` is copied to Triton. Then `docs/runbooks/backup-cleanup.md` phase 2 around 2026-10-29.
 - **#18 (needs 02):** the wp-env restore rehearsal in `docs/runbooks/restore.md` 3A.
 
 ## Issue template
