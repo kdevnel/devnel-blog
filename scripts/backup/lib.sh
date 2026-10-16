@@ -121,7 +121,7 @@ mem_headroom_mb() {
 # kill_tree <pid> [signal]: signal a process and all its descendants (children first). Never fails.
 kill_tree() {
   local pid="$1" sig="${2:-TERM}" child
-  for child in $(pgrep -P "$pid" 2>/dev/null || true); do kill_tree "$child" "$sig"; done
+  for child in $("${PGREP_BIN:-pgrep}" -P "$pid" 2>/dev/null || true); do kill_tree "$child" "$sig"; done
   kill "-$sig" "$pid" 2>/dev/null || true
 }
 

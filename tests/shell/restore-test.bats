@@ -295,8 +295,8 @@ failed_with_alert() {
   grep -q 'ALERT .*body=import aborted: memory headroom fell to 300 MB' "$STUB_LOG"
   # the stub and its sleep were killed, nothing is left running
   read -r stub_pid sleep_pid <"$STUB_MYSQL_PIDFILE"
-  ! kill -0 "$stub_pid" 2>/dev/null
-  ! kill -0 "$sleep_pid" 2>/dev/null
+  ! kill -0 "$stub_pid" 2>/dev/null || false
+  ! kill -0 "$sleep_pid" 2>/dev/null || false
 }
 
 @test "watchdog: a normal import is not failed by watchdog teardown and logs the lowest headroom" {
@@ -305,7 +305,7 @@ failed_with_alert() {
   run_rt
   [ "$status" -eq 0 ]
   [[ "$output" == *"memory headroom: 2100 MB at start, lowest 2100 MB during import (abort floor 512 MB)"* ]]
-  ! grep -q 'restore-uuid/fail' "$STUB_LOG"
+  ! grep -q 'restore-uuid/fail' "$STUB_LOG" || false
   grep -q 'curl https://hc.example.test/ping/restore-uuid$' "$STUB_LOG"
 }
 
@@ -313,5 +313,78 @@ failed_with_alert() {
   STUB_MYSQL_IMPORT_RC=1 run_rt
   [ "$status" -ne 0 ]
   [[ "$output" != *"import aborted"* ]]
+  [[ "$output" == *"import into devnel_blog_restoretest failed (exit 1)"* ]]
+  grep -q 'ALERT .*body=import into devnel_blog_restoretest failed (exit 1)' "$STUB_LOG"
   failed_with_alert
+}
+
+@test "watchdog: an import that fails by itself also reports it with the watchdog off" {
+  write_config "RESTORE_ABORT_MEM_MB=0"
+  STUB_MYSQL_IMPORT_RC=1 run_rt
+  [ "$status" -ne 0 ]
+  grep -q 'ALERT .*body=import into devnel_blog_restoretest failed (exit 1)' "$STUB_LOG"
+}
+
+@test "memory: leading zeros are rejected, not read as octal" {
+  write_config "RESTORE_MIN_MEM_MB=0900"
+  run_rt
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"RESTORE_MIN_MEM_MB must be a non-negative integer without leading zeros"* ]]
+  write_config "RESTORE_ABORT_MEM_MB=0512"
+  run_rt
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"RESTORE_ABORT_MEM_MB must be a non-negative integer without leading zeros"* ]]
+  write_config "RESTORE_MEM_POLL_SECONDS=02"
+  run_rt
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"RESTORE_MEM_POLL_SECONDS must be a positive integer without leading zeros"* ]]
+  no_scratch_sql
+}
+
+@test "watchdog: fails closed at startup when pgrep is missing" {
+  PGREP_BIN=no-such-pgrep-binary run_rt
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"pgrep is required for the import watchdog"* ]]
+  no_scratch_sql
+  # not needed when the watchdog is off
+  write_config "RESTORE_ABORT_MEM_MB=0"
+  PGREP_BIN=no-such-pgrep-binary run_rt
+  [ "$status" -eq 0 ]
+}
+
+@test "watchdog: meminfo losing its fields during the import aborts it and drops the scratch DB" {
+  write_config "RESTORE_MEM_POLL_SECONDS=1"
+  export STUB_MYSQL_IMPORT_SLEEP=30 STUB_MYSQL_PIDFILE="$BATS_TEST_TMPDIR/import.pids"
+  export STUB_MYSQL_IMPORT_MEMINFO="$MEMINFO_FILE"
+  export STUB_MYSQL_IMPORT_MEMINFO_TEXT='MemTotal: 16000000 kB\n'
+  local start=$SECONDS
+  run_rt
+  [ "$status" -ne 0 ]
+  [ $((SECONDS - start)) -lt 15 ]
+  [[ "$output" == *"import aborted: cannot read MemAvailable and SwapFree"* ]]
+  [ "$(grep -c 'DROP DATABASE IF EXISTS `devnel_blog_restoretest`' "$STUB_LOG")" -ge 2 ]
+  failed_with_alert
+  read -r stub_pid sleep_pid <"$STUB_MYSQL_PIDFILE"
+  ! kill -0 "$stub_pid" 2>/dev/null || false
+  ! kill -0 "$sleep_pid" 2>/dev/null || false
+}
+
+@test "signal: TERM during the import kills it, drops the scratch DB and alerts with the signal" {
+  write_config "RESTORE_MEM_POLL_SECONDS=1"
+  export STUB_MYSQL_IMPORT_SLEEP=30 STUB_MYSQL_PIDFILE="$BATS_TEST_TMPDIR/import.pids"
+  "$RESTORE_SH" test >"$BATS_TEST_TMPDIR/out.log" 2>&1 &
+  local pid=$! i
+  for i in $(seq 1 100); do [ -s "$STUB_MYSQL_PIDFILE" ] && break; sleep 0.1; done
+  [ -s "$STUB_MYSQL_PIDFILE" ]
+  kill -TERM "$pid"
+  local rc=0
+  wait "$pid" || rc=$?
+  [ "$rc" -eq 143 ]
+  grep -q 'interrupted by signal TERM' "$BATS_TEST_TMPDIR/out.log"
+  [ "$(grep -c 'DROP DATABASE IF EXISTS `devnel_blog_restoretest`' "$STUB_LOG")" -ge 2 ]
+  grep -q 'ALERT .*body=interrupted by signal TERM' "$STUB_LOG"
+  grep -q 'restore-uuid/fail' "$STUB_LOG"
+  read -r stub_pid sleep_pid <"$STUB_MYSQL_PIDFILE"
+  ! kill -0 "$stub_pid" 2>/dev/null || false
+  ! kill -0 "$sleep_pid" 2>/dev/null || false
 }

@@ -40,11 +40,13 @@ rt_mysql() { mysql --defaults-extra-file="$RESTORE_DEFAULTS_FILE" "$@"; }
 
 drop_scratch() {
   [[ $SCRATCH_ARMED -eq 1 ]] || return 0
-  rt_mysql -e "DROP DATABASE IF EXISTS \`$SCRATCH_DB\`" || log "WARNING: could not drop $SCRATCH_DB"
+  # lock_wait_timeout bounds the wait if a stuck server thread holds a metadata lock.
+  rt_mysql -e "SET SESSION lock_wait_timeout=60; DROP DATABASE IF EXISTS \`$SCRATCH_DB\`" || log "WARNING: could not drop $SCRATCH_DB"
 }
 
 on_exit() {
   local rc=$?
+  trap '' TERM INT HUP
   trap - EXIT ERR
   if [[ -n "$IMPORT_PID" ]]; then
     kill_tree "$IMPORT_PID" KILL
@@ -61,7 +63,9 @@ on_exit() {
   exit "$rc"
 }
 trap on_exit EXIT
-trap 'exit 143' TERM INT HUP
+trap 'FAIL_MSG="interrupted by signal TERM"; exit 143' TERM
+trap 'FAIL_MSG="interrupted by signal INT"; exit 130' INT
+trap 'FAIL_MSG="interrupted by signal HUP"; exit 129' HUP
 
 load_config "$SITE"
 STARTED=1
@@ -71,10 +75,17 @@ is_uint "$RESTORE_POSTS_TOLERANCE" || die "RESTORE_POSTS_TOLERANCE must be a non
 : "${RESTORE_MIN_MEM_MB:=1536}"
 : "${RESTORE_ABORT_MEM_MB:=512}"
 : "${RESTORE_MEM_POLL_SECONDS:=2}"
-is_uint "$RESTORE_MIN_MEM_MB" || die "RESTORE_MIN_MEM_MB must be a non-negative integer"
-is_uint "$RESTORE_ABORT_MEM_MB" || die "RESTORE_ABORT_MEM_MB must be a non-negative integer"
-if ! is_uint "$RESTORE_MEM_POLL_SECONDS" || [[ "$RESTORE_MEM_POLL_SECONDS" -lt 1 ]]; then
-  die "RESTORE_MEM_POLL_SECONDS must be a positive integer"
+# No leading zeros: bash would read 0512 as octal (and 0900 as an error that makes a test false).
+canon_uint='^(0|[1-9][0-9]*)$'
+[[ "$RESTORE_MIN_MEM_MB" =~ $canon_uint ]] ||
+  die "RESTORE_MIN_MEM_MB must be a non-negative integer without leading zeros (is '$RESTORE_MIN_MEM_MB')"
+[[ "$RESTORE_ABORT_MEM_MB" =~ $canon_uint ]] ||
+  die "RESTORE_ABORT_MEM_MB must be a non-negative integer without leading zeros (is '$RESTORE_ABORT_MEM_MB')"
+if ! [[ "$RESTORE_MEM_POLL_SECONDS" =~ $canon_uint ]] || [[ "$RESTORE_MEM_POLL_SECONDS" -lt 1 ]]; then
+  die "RESTORE_MEM_POLL_SECONDS must be a positive integer without leading zeros (is '$RESTORE_MEM_POLL_SECONDS')"
+fi
+if [[ "$RESTORE_ABORT_MEM_MB" -ne 0 ]]; then
+  command -v "${PGREP_BIN:-pgrep}" >/dev/null 2>&1 || die "pgrep is required for the import watchdog"
 fi
 if [[ "$RESTORE_MIN_MEM_MB" -ne 0 && "$RESTORE_ABORT_MEM_MB" -ne 0 && "$RESTORE_ABORT_MEM_MB" -ge "$RESTORE_MIN_MEM_MB" ]]; then
   die "RESTORE_ABORT_MEM_MB ($RESTORE_ABORT_MEM_MB) must be less than RESTORE_MIN_MEM_MB ($RESTORE_MIN_MEM_MB)"
@@ -196,7 +207,10 @@ import_with_watchdog() {
   fi
   wait "$IMPORT_PID" || rc=$?
   IMPORT_PID=""
-  return "$rc"
+  if [[ "$rc" -ne 0 ]]; then
+    FAIL_MSG="import into $SCRATCH_DB failed (exit $rc)"
+    return "$rc"
+  fi
 }
 
 # --- Restore into the scratch database. ---
