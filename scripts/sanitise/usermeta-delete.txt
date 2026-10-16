@@ -8,3 +8,5 @@ jetpack_account_protection_recent_password_hashes
 %private%
 %token%
 %secret%
+# Core's dashboard events widget stores the last known location, including an IP address
+community-events-location

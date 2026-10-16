@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Check that a database holds no PII or secrets. Fails (exit 1) on any of:
 #   - an email-shaped string that is not an @example.test address, in any text column
-#   - an IPv4/IPv6 address in the comments or commentmeta tables
+#   - an IPv4/IPv6 address in the comments, commentmeta, usermeta, postmeta or options tables
 #   - a "-----BEGIN" (PEM) block in any text column
 #   - an option, usermeta key, postmeta key or post type from the sanitisation lists
 #     (scripts/sanitise/*.txt)
@@ -9,7 +9,8 @@
 # It prints table and column names (and list entries), never the matched values.
 #
 # Usage: scripts/check-sanitised.sh [--wp-env | --container <name>]
-#   --wp-env           (default) the wp-env development database
+#   --wp-env           (default) the wp-env development database; locally generated options
+#                      (transients and the like) are deleted first
 #   --container <name> the throwaway MySQL container that pull-db.sh sanitises in
 set -euo pipefail
 
@@ -52,6 +53,16 @@ if ! grep -qx "${p}options"$'\t'"option_name" <<<"$cols"; then
   exit 2
 fi
 
+# In --wp-env mode, first delete the listed options again. WordPress writes fresh transients (and
+# plugins may regenerate their own keys) during normal local use; they hold nothing from production.
+# The pass over the throwaway container in pull-db.sh is the authoritative one.
+if [[ "$target" == "wpenv" ]]; then
+  san_delete_options "$target" || {
+    san_err "could not clear locally generated options"
+    exit 2
+  }
+fi
+
 has_col() { grep -qx "$1"$'\t'"$2" <<<"$cols"; }
 
 queries=""
@@ -64,12 +75,14 @@ while IFS=$'\t' read -r table column; do
   [[ -n "$table" ]] || continue
   select_where "email $table.$column" "$table" "$(san_email_cond "\`$column\`")"
   select_where "pem $table.$column" "$table" "\`$column\` LIKE '%-----BEGIN%'"
-  if [[ "$table" == "${p}comments" || "$table" == "${p}commentmeta" ]]; then
-    select_where "ip $table.$column" "$table" "$(san_ipv4_cond "\`$column\`")"
-  fi
+  case "$table" in
+    "${p}comments" | "${p}commentmeta" | "${p}usermeta" | "${p}postmeta" | "${p}options")
+      select_where "ip $table.$column" "$table" "$(san_ipv4_cond "\`$column\`")"
+      ;;
+  esac
 done <<<"$cols"
 
-for spec in "comments comment_author_IP" "commentmeta meta_value"; do
+for spec in "comments comment_author_IP" "commentmeta meta_value" "usermeta meta_value" "postmeta meta_value" "options option_value"; do
   read -r short column <<<"$spec"
   if has_col "${p}$short" "$column"; then
     select_where "ip ${p}$short.$column" "${p}$short" "$(san_ipv6_cond "\`$column\`")"

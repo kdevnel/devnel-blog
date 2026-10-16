@@ -30,6 +30,7 @@ post_smtp_webhook_urls
 # Spam and polling API keys
 wordpress_api_key
 crowdsignal_api_key
+crowdsignal_user_code
 
 # UpdraftPlus remote storage and account
 updraft_s3
@@ -66,6 +67,13 @@ auth_key
 secure_auth_key
 logged_in_key
 %!_salt
+
+# Jetpack connection nonces
+jetpack!_nonce!_%
+
+# Mailing-list widget settings, which can hold list or form keys
+widget_widget_mailchimp_subscriber_popup
+widget_wpcom-mailerlite
 
 # Core update notices record the admin email
 auto_core_update_notified

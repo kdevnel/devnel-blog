@@ -62,6 +62,12 @@ run_check() { run "$CHECK" --container "$CONTAINER"; }
   [[ "$output" == *"  option mailserver_pass"* ]]
   [[ "$output" == *"  option updraft_s3"* ]]
   [[ "$output" == *"  usermeta session_tokens"* ]]
+  [[ "$output" == *"  usermeta community-events-location"* ]]
+  [[ "$output" == *"  ip wp_usermeta.meta_value"* ]]
+  [[ "$output" == *"  option crowdsignal_user_code"* ]]
+  [[ "$output" == *"  option jetpack!_nonce!_%"* ]]
+  [[ "$output" == *"  option widget_widget_mailchimp_subscriber_popup"* ]]
+  [[ "$output" == *"  option widget_wpcom-mailerlite"* ]]
   [[ "$output" == *"  nonempty wp_post_smtp_logs"* ]]
   [[ "$output" == *"  nonempty wp_zbs_contacts"* ]]
   [[ "$output" == *"  posttype ap_actor"* ]]
@@ -163,6 +169,13 @@ expect_only() {
   [[ "$output" == *"  $1"* ]]
 }
 
+# expect_only_count <n>: the check fails with exactly n problems.
+expect_only_count() {
+  run_check
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"($1 problem(s))"* ]]
+}
+
 @test "detects an email outside example.test in a post" {
   sanitise
   sql "UPDATE wp_posts SET post_content = 'mail me: someone@gmail.com' WHERE ID = 1"
@@ -200,6 +213,80 @@ expect_only() {
   sanitise
   sql "INSERT INTO wp_commentmeta (comment_id, meta_key, meta_value) VALUES (1, 'x', '192.0.2.44')"
   expect_only "ip wp_commentmeta.meta_value"
+}
+
+@test "detects an IPv4 address in usermeta, postmeta and options values" {
+  sanitise
+  sql "INSERT INTO wp_usermeta (user_id, meta_key, meta_value) VALUES (1, 'harmless_name', 'last seen 192.0.2.10')"
+  expect_only "ip wp_usermeta.meta_value"
+  sql "DELETE FROM wp_usermeta WHERE meta_key = 'harmless_name'; INSERT INTO wp_postmeta (post_id, meta_key, meta_value) VALUES (1, 'harmless_name', '198.51.100.20')"
+  expect_only "ip wp_postmeta.meta_value"
+  sql "DELETE FROM wp_postmeta WHERE meta_key = 'harmless_name'; INSERT INTO wp_options (option_name, option_value) VALUES ('harmless_name', 'a:1:{s:2:\"ip\";s:11:\"203.0.113.5\";}')"
+  expect_only "ip wp_options.option_value"
+}
+
+@test "detects an IPv6 address in usermeta, postmeta and options values" {
+  sanitise
+  sql "INSERT INTO wp_usermeta (user_id, meta_key, meta_value) VALUES (1, 'harmless_name', '2001:db8:85a3::8a2e:370:7334')"
+  expect_only "ip wp_usermeta.meta_value"
+  sql "DELETE FROM wp_usermeta WHERE meta_key = 'harmless_name'; INSERT INTO wp_postmeta (post_id, meta_key, meta_value) VALUES (1, 'harmless_name', '2001:db8::5')"
+  expect_only "ip wp_postmeta.meta_value"
+  sql "DELETE FROM wp_postmeta WHERE meta_key = 'harmless_name'; INSERT INTO wp_options (option_name, option_value) VALUES ('harmless_name', '2001:db8::9')"
+  expect_only "ip wp_options.option_value"
+}
+
+@test "the events-widget location (which holds an IP) is deleted by the sanitiser" {
+  sanitise
+  [ "$(sql "SELECT COUNT(*) FROM wp_usermeta WHERE meta_key = 'community-events-location'")" = 0 ]
+}
+
+@test "detects a leftover community-events-location" {
+  sanitise
+  sql "INSERT INTO wp_usermeta (user_id, meta_key, meta_value) VALUES (1, 'community-events-location', 'x')"
+  expect_only "usermeta community-events-location"
+}
+
+@test "detects an email whose @ is URL-encoded (%40) in a kept table" {
+  sanitise
+  sql "UPDATE wp_redirection_items SET url = '/contact?to=someone%40mail.invalid'"
+  expect_only "email wp_redirection_items.url"
+}
+
+@test "detects an email whose @ is an HTML entity (&#64; and &#x40;)" {
+  sanitise
+  sql "UPDATE wp_redirection_items SET url = 'someone&#64;mail.invalid'"
+  expect_only "email wp_redirection_items.url"
+  sql "UPDATE wp_redirection_items SET url = 'someone&#x40;mail.invalid'"
+  expect_only "email wp_redirection_items.url"
+  sql "UPDATE wp_redirection_items SET url = 'someone&#X040;mail.invalid'"
+  expect_only "email wp_redirection_items.url"
+}
+
+@test "encoded @ on example.test is allowed, and a bare %40 or &# without an address is not flagged" {
+  sanitise
+  sql "UPDATE wp_redirection_items SET url = 'a%40example.test and 100%40 and &#169; and a&#64;example.test'"
+  run_check
+  [ "$status" -eq 0 ]
+}
+
+@test "the sanitiser replaces encoded email addresses in post text too" {
+  sanitise
+  sql "UPDATE wp_posts SET post_content = 'mail someone%40mail.invalid or someone&#64;mail.invalid' WHERE ID = 1"
+  sanitise
+  [ "$(sql "SELECT post_content FROM wp_posts WHERE ID = 1")" = "mail redacted@example.test or redacted@example.test" ]
+}
+
+@test "wp-env mode clears locally generated options first; the container mode does not (db:check after normal use)" {
+  # shellcheck source=scripts/sanitise/lib.sh
+  source "$REPO_ROOT/scripts/sanitise/lib.sh"
+  sanitise
+  sql "INSERT INTO wp_options (option_name, option_value) VALUES ('_site_transient_update_plugins', 'x'), ('_transient_doing_cron', 'x'), ('activitypub_keypair_for_0', 'x')"
+  expect_only_count 3
+  san_delete_options "container:$CONTAINER"
+  run_check
+  [ "$status" -eq 0 ]
+  # and the deletion touches only the listed options
+  [ "$(sql "SELECT option_value FROM wp_options WHERE option_name = 'blogname'")" = "Test blog" ]
 }
 
 @test "an IP-looking version string with fewer than four parts is not an IP" {

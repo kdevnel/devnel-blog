@@ -25,11 +25,15 @@ die() {
 note() { printf '[env:sync] %s\n' "$*" >&2; }
 
 # Read-only commands on production.
+# - `wp core version` only reads wp-includes/version.php (WP-CLI's Core_Command::version).
+# - `wp plugin list` normally refreshes the update_plugins site transient and calls api.wordpress.org
+#   (WP-CLI's plugin command runs wp_update_plugins() unless --skip-update-check, documented as "the
+#   plugin update check will be skipped"), which would write to production's database.
 core="$(ssh "$PROD_HOST" 'cd ~/devnel.blog/public && wp core version')" || die "could not read the core version"
 core="$(printf '%s' "$core" | tr -d '[:space:]')"
 [[ "$core" =~ ^[0-9]+(\.[0-9]+){1,2}([-.][0-9A-Za-z]+)?$ ]] || die "unexpected core version output"
 
-plugins_json="$(ssh "$PROD_HOST" 'cd ~/devnel.blog/public && wp plugin list --fields=name,version,status --format=json')" ||
+plugins_json="$(ssh "$PROD_HOST" 'cd ~/devnel.blog/public && wp plugin list --skip-update-check --fields=name,version,status --format=json')" ||
   die "could not read the plugin list"
 
 rows="$(printf '%s' "$plugins_json" | node -e '

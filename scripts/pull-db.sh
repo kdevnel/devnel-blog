@@ -82,12 +82,14 @@ name="devnel-sanitise-$suffix"
 log "starting isolated container $name ($IMAGE, no network, no published ports, data in memory)"
 # --network none: nothing can reach it and it can reach nothing; the only way in is docker exec.
 # The root account has no password because the server is not reachable over any network.
+# Set before docker run, so the trap also removes a half-created container (rm -f of a missing name
+# is harmless).
+container="$name"
 docker run -d --name "$name" --network none \
-  --tmpfs /var/lib/mysql:rw,mode=1777 \
+  --tmpfs /var/lib/mysql:rw,mode=1777 --tmpfs /tmp \
   -e MYSQL_ALLOW_EMPTY_PASSWORD=1 -e MYSQL_DATABASE="$SAN_DB" \
   "$IMAGE" --skip-log-bin --max-allowed-packet=256M --innodb-flush-log-at-trx-commit=2 \
   >/dev/null || die "could not start the container"
-container="$name"
 
 # Wait for the real server. mysqld first runs a temporary server (no TCP) to initialise the
 # database, so ping over TCP: it only answers once the final server is up.
@@ -158,11 +160,6 @@ fi
 while IFS= read -r plugin; do
   wpenv plugin deactivate "$plugin" >/dev/null 2>&1 || log "note: $plugin not active or not installed locally"
 done < <(san_entries "$SAN_DIR/deactivate-plugins.txt")
-
-# WordPress writes fresh transients (and plugins may regenerate their own keys) while the commands
-# above run. They hold nothing from production, but the check rightly refuses them, so remove them
-# again: the same DELETE the sanitiser ran.
-san_delete_options wpenv || die "could not clear locally generated options"
 
 log "checking wp-env"
 "$CHECK_SCRIPT" --wp-env || die "wp-env failed the sanitisation check"

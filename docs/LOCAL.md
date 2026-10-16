@@ -20,7 +20,7 @@ After `db:pull` the local admin is `admin` / `password` (a local-only account, c
 ## Versions: what `.wp-env.json` pins and what `env:sync` pins
 
 - `.wp-env.json` (committed) pins PHP 8.4, a WordPress **release** and wordpress.org plugin zips that CI can download. These are not necessarily production's versions: this repository is public and must not record exactly what production runs.
-- `npm run env:sync` reads production's core and plugin versions **read-only** (`wp core version`, `wp plugin list --fields=name,version,status --format=json`) and writes `.wp-env.override.json`, which is gitignored. wp-env merges it over `.wp-env.json`, so locally you run exactly what production runs. Apply it with `npm run env:start -- --update`.
+- `npm run env:sync` reads production's core and plugin versions **read-only** (`wp core version`, `wp plugin list --skip-update-check --fields=name,version,status --format=json`) and writes `.wp-env.override.json`, which is gitignored. wp-env merges it over `.wp-env.json`, so locally you run exactly what production runs. Apply it with `npm run env:start -- --update`.
 - Left out of the override, with a note when you run it: plugins that must not run locally (`worker`, `post-smtp`, `updraftplus`, `nginx-cache`, `redis-cache`, `amazon-s3-and-cloudfront`) and plugins with no wordpress.org release zip (`friends-autoresolve-links`, `friends-post-collection`; the blocks they register show as unregistered locally).
 - To bump the committed set, edit the versions in `.wp-env.json`.
 
@@ -103,9 +103,9 @@ The throwaway sanitising container, which does hold raw data for a short time, p
 
 ## Uploads
 
-`npm run uploads:pull` runs `rsync -a --delete` from production's `wp-content/uploads` into `.data/uploads`, which wp-env maps to `wp-content/uploads`. Production is only ever the rsync source (never `--remove-source-files`); `--delete` only removes files from your local copy.
+`npm run uploads:pull` runs `rsync -a --delete --delete-excluded` from production's `wp-content/uploads` into `.data/uploads`, which wp-env maps to `wp-content/uploads`. Production is only ever the rsync source (never `--remove-source-files`); `--delete` only removes files from your local copy.
 
-Images in uploads are public on the live site, so they are not sanitised.
+Uploads are **copied as is**, not sanitised: media is public on the live site. Because wp-env's ports are open on your network, private plugin files are excluded by `scripts/sanitise/uploads-exclude.txt`: Jetpack CRM's `zbscrm-store/` (client files), `jpcrm-storage/` and `invoices/` (names taken from the Jetpack CRM plugin source), form-plugin folders (`wpforms/`, `gravity_forms/`, `ninja-forms/`, `cfdb7_uploads/`, `jetpack-contact-form*/`, `grunion*/`; defensive, not looked up), `post-smtp*/`, `updraft/`, `backup*/`, and any `*.sql`, `*.sql.*`, `*.log` or `*.zip` file. Add to that list if a plugin starts keeping private files under uploads.
 
 ## Troubleshooting
 

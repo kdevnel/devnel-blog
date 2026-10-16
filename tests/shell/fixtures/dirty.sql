@@ -35,7 +35,8 @@ INSERT INTO wp_usermeta (user_id, meta_key, meta_value) VALUES
   (2, 'service_API_TOKEN', 'fake'),
   (2, 'x_secret_y', 'fake'),
   (2, 'keypair', CONCAT('-----BE', 'GIN FAKE-----')),
-  (2, 'locale', 'en_GB');
+  (2, 'locale', 'en_GB'),
+  (1, 'community-events-location', 'a:1:{s:2:"ip";s:12:"203.0.113.77";}');
 
 CREATE TABLE wp_comments (
   comment_ID bigint unsigned NOT NULL AUTO_INCREMENT PRIMARY KEY,
@@ -112,6 +113,10 @@ INSERT INTO wp_options (option_name, option_value) VALUES
   ('_site_transient_update_core', 'cached'),
   ('some_plugin_blob', CONCAT('-----BE', 'GIN FAKE-----')),
   ('auto_core_update_notified', 'a:1:{s:5:"email";s:22:"owner@corp.example.org";}'),
+  ('crowdsignal_user_code', 'fake'),
+  ('jetpack_nonce_1234', 'fake'),
+  ('widget_widget_mailchimp_subscriber_popup', 'fake'),
+  ('widget_wpcom-mailerlite', 'fake'),
   ('blogdescription', 'Just another test');
 
 CREATE TABLE wp_posts (

@@ -2,7 +2,9 @@
 # Copy production's uploads into .data/uploads (mapped into wp-env as wp-content/uploads).
 #
 # Read-only on production: the remote is only ever the rsync *source*, and --remove-source-files is
-# never used. --delete removes files from the local copy that no longer exist on production.
+# never used. --delete removes files from the local copy that no longer exist on production, and
+# --delete-excluded also removes anything scripts/sanitise/uploads-exclude.txt keeps out (private
+# plugin files), in case an earlier copy had it.
 #
 # Usage: scripts/pull-uploads.sh
 # Environment (mostly for tests): DEVNEL_PROD_HOST, DEVNEL_DATA_DIR.
@@ -12,6 +14,7 @@ umask 077
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PROD_HOST="${DEVNEL_PROD_HOST:-triton.devnel.com}"
 DATA_DIR="${DEVNEL_DATA_DIR:-$root/.data}"
+EXCLUDE_FILE="$root/scripts/sanitise/uploads-exclude.txt"
 REMOTE_UPLOADS="devnel.blog/public/wp-content/uploads/"
 
 die() {
@@ -20,6 +23,7 @@ die() {
 }
 
 command -v rsync >/dev/null 2>&1 || die "rsync not found"
+[[ -f "$EXCLUDE_FILE" ]] || die "missing $EXCLUDE_FILE"
 
 mkdir -p "$DATA_DIR"
 chmod 700 "$DATA_DIR"
@@ -36,5 +40,5 @@ mkdir -p "$dest"
 [[ "$dest" == "$data_real/uploads" && "$dest" != "/" ]] || die "unsafe destination"
 
 echo "[pull-uploads] rsync $PROD_HOST:$REMOTE_UPLOADS -> ${dest#"$root_real"/}" >&2
-rsync -a --delete "$PROD_HOST:$REMOTE_UPLOADS" "$dest/"
+rsync -a --delete --delete-excluded --exclude-from="$EXCLUDE_FILE" "$PROD_HOST:$REMOTE_UPLOADS" "$dest/"
 echo "[pull-uploads] done" >&2

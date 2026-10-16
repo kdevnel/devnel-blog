@@ -52,7 +52,7 @@ run_sync() { run "$SYNC"; }
   [ "$status" -eq 0 ]
   [ "$(grep -c '^ssh ' "$STUB_LOG")" -eq 2 ]
   grep -qxF 'ssh triton.devnel.com cd ~/devnel.blog/public && wp core version' "$STUB_LOG"
-  grep -qxF 'ssh triton.devnel.com cd ~/devnel.blog/public && wp plugin list --fields=name,version,status --format=json' "$STUB_LOG"
+  grep -qxF 'ssh triton.devnel.com cd ~/devnel.blog/public && wp plugin list --skip-update-check --fields=name,version,status --format=json' "$STUB_LOG"
 }
 
 @test "ssh failure: non-zero, and an existing override is left as it was" {

@@ -13,8 +13,9 @@ SAN_DB="wordpress"
 
 # Regular expressions (ICU, as used by MySQL 8). No backslashes and no single quotes, so they can
 # sit inside SQL string literals unchanged.
-# An email-shaped string that is not an @example.test address.
-SAN_EMAIL_RE='[A-Za-z0-9._%+-]+@(?!example[.]test(?![A-Za-z0-9-])(?![.][A-Za-z0-9]))[A-Za-z0-9-]+([.][A-Za-z0-9-]+)*[.][A-Za-z]{2,}'
+# An email-shaped string that is not an @example.test address. The "@" may also be URL-encoded
+# (%40) or an HTML entity (&#64; or &#x40;), as in a URL or in markup.
+SAN_EMAIL_RE='[A-Za-z0-9._%+-]+(@|%40|&#0*64;|&#x0*40;)(?!example[.]test(?![A-Za-z0-9-])(?![.][A-Za-z0-9]))[A-Za-z0-9-]+([.][A-Za-z0-9-]+)*[.][A-Za-z]{2,}'
 # An IPv4 address other than 127.0.0.1.
 SAN_IPV4_RE='(?<![0-9])(?!127[.]0[.]0[.]1(?![0-9]))(25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9])([.](25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9])){3}(?![0-9])'
 # An IPv6 address, full or compressed.
@@ -22,7 +23,7 @@ SAN_IPV6_RE='(?<![0-9a-f:])(([0-9a-f]{1,4}:){7}[0-9a-f]{1,4}|([0-9a-f]{1,4}:){1,
 
 # Conditions for the three patterns. The cheap LIKE runs first so the (slow) regular expression only
 # sees values that could match.
-san_email_cond() { printf "(%s LIKE '%%@%%' AND %s REGEXP '%s')" "$1" "$1" "$SAN_EMAIL_RE"; }
+san_email_cond() { printf "((%s LIKE '%%@%%' OR %s LIKE '%%!%%40%%' ESCAPE '!' OR %s LIKE '%%&#%%') AND %s REGEXP '%s')" "$1" "$1" "$1" "$1" "$SAN_EMAIL_RE"; }
 san_ipv4_cond() { printf "(%s LIKE '%%.%%.%%.%%' AND %s REGEXP '%s')" "$1" "$1" "$SAN_IPV4_RE"; }
 san_ipv6_cond() { printf "(%s LIKE '%%:%%:%%' AND %s REGEXP '%s')" "$1" "$1" "$SAN_IPV6_RE"; }
 

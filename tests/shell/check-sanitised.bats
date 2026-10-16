@@ -31,6 +31,31 @@ setup() { pull_setup; }
   ! grep -q '^docker exec' "$STUB_LOG"
 }
 
+@test "--wp-env deletes the listed options first (transients written by normal use); --container never writes" {
+  run "$CHECK"
+  [ "$status" -eq 0 ]
+  cleanup="$(line_no '^wpenv sanitise-options$')"
+  check="$(line_no '^wpenv check$')"
+  [ -n "$cleanup" ] && [ "$cleanup" -lt "$check" ]
+  sql="$(cat "$STUB_SQL_DIR"/sql-*-options.sql)"
+  [[ "$sql" == *"DELETE FROM \`wp_options\`"* && "$sql" == *"!_transient!_%"* ]]
+  [[ "$sql" != *"wp_posts"* ]]
+  : >"$STUB_LOG"
+  run "$CHECK" --container c1
+  [ "$status" -eq 0 ]
+  ! grep -q 'sanitise-options' "$STUB_LOG"
+}
+
+@test "the check queries cover IPs in usermeta, postmeta and options, and the encoded email forms" {
+  STUB_COLUMNS='wp_options\toption_name\nwp_options\toption_value\nwp_usermeta\tmeta_value\nwp_postmeta\tmeta_value' run "$CHECK" --container c1
+  [ "$status" -eq 0 ]
+  sql="$(cat "$STUB_SQL_DIR"/sql-*-check.sql)"
+  for t in wp_options.option_value wp_usermeta.meta_value wp_postmeta.meta_value; do
+    [[ "$sql" == *"'ip $t'"* ]]
+  done
+  [[ "$sql" == *"%40"* && "$sql" == *"&#"* ]]
+}
+
 @test "the generated check SQL probes every class and every listed name" {
   STUB_COLUMNS='wp_options\toption_name\nwp_posts\tpost_content\nwp_usermeta\tmeta_key' run "$CHECK" --container c1
   [ "$status" -eq 0 ]

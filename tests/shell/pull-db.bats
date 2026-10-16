@@ -26,6 +26,7 @@ run_pull() { run "$PULL"; }
   [[ "$line" == *"--network none"* ]]
   [[ "$line" == *" mysql:8.4 "* ]]
   [[ "$line" == *"--tmpfs /var/lib/mysql"* ]]
+  [[ "$line" == *"--tmpfs /tmp "* ]]
   [[ "$line" != *" -p "* && "$line" != *" -p"[0-9]* && "$line" != *"--publish"* && "$line" != *" -P "* ]]
   [[ "$(container_name)" =~ ^devnel-sanitise-[0-9a-f]{12}$ ]]
   # a different name on the next run
@@ -145,6 +146,8 @@ run_pull() { run "$PULL"; }
 @test "docker run failing fails cleanly without talking to production" {
   STUB_DOCKER_RUN_FAIL=1 run_pull
   [ "$status" -ne 0 ]
+  # a half-created container is still removed by the trap
+  container_removed
   ! grep -q '^ssh ' "$STUB_LOG"
   nothing_in_wpenv
 }
