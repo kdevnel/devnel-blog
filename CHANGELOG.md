@@ -18,3 +18,6 @@ All notable changes to the devNel theme and tooling are recorded here. The forma
   (weekly automated restore into a scratch database with a restricted MySQL user, compared against
   production, with its own disk guard). Runbooks for install, restore and cleanup in
   `docs/runbooks/`.
+- Restore test memory guard (#18): `restore-test.sh` refuses to start without enough free memory
+  (RAM + swap) and aborts the import, with an alert, if headroom falls too low while it runs.
+  New settings `RESTORE_MIN_MEM_MB`, `RESTORE_ABORT_MEM_MB`, `RESTORE_MEM_POLL_SECONDS`.

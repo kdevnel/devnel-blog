@@ -2,6 +2,12 @@
 # Stub mysql client for restore-test. Records the SQL passed with -e and swallows stdin on import.
 # STUB_MYSQL_USER is the current user; STUB_MYSQL_PROD_ACCESS=1 lets that user `USE` the prod DB;
 # STUB_MYSQL_FAIL_CREATE=1 fails CREATE DATABASE; STUB_MYSQL_IMPORT_RC fails the import.
+# STUB_MYSQL_IMPORT_SLEEP=<s> makes the import hang that long; if STUB_MYSQL_IMPORT_MEMINFO is set,
+# that file is first overwritten with STUB_MYSQL_IMPORT_MEMINFO_TEXT. STUB_MYSQL_PIDFILE receives
+# "<stub pid> <sleep pid>" so tests can prove the import was killed.
+# STUB_MYSQL_IGNORE_TERM=1 makes the hanging import ignore TERM (killed only by KILL).
+# STUB_MYSQL_DROP_SLEEP=<s> makes the cleanup DROP (the "SET SESSION" statement) slow and logs
+# "mysql DROP SLOW" before and "mysql DROP DONE" after.
 sql=""
 args=("$@")
 for i in "${!args[@]}"; do
@@ -10,10 +16,26 @@ done
 if [[ -z "$sql" ]]; then
   echo "mysql IMPORT $*" >>"${STUB_LOG:?}"
   cat >/dev/null
+  if [[ -n "${STUB_MYSQL_IMPORT_SLEEP:-}" ]]; then
+    if [[ -n "${STUB_MYSQL_IMPORT_MEMINFO:-}" ]]; then
+      printf '%b' "${STUB_MYSQL_IMPORT_MEMINFO_TEXT:?}" >"$STUB_MYSQL_IMPORT_MEMINFO"
+    fi
+    if [[ -n "${STUB_MYSQL_IGNORE_TERM:-}" ]]; then trap '' TERM; fi
+    sleep "$STUB_MYSQL_IMPORT_SLEEP" &
+    echo "$$ $!" >"${STUB_MYSQL_PIDFILE:?}"
+    wait $!
+  fi
   exit "${STUB_MYSQL_IMPORT_RC:-0}"
 fi
 echo "mysql SQL: $sql" >>"${STUB_LOG:?}"
 case "$sql" in
+  "SET SESSION"*)
+    if [[ -n "${STUB_MYSQL_DROP_SLEEP:-}" ]]; then
+      echo "mysql DROP SLOW" >>"$STUB_LOG"
+      sleep "$STUB_MYSQL_DROP_SLEEP"
+      echo "mysql DROP DONE" >>"$STUB_LOG"
+    fi
+    ;;
   "SELECT @@datadir") echo "${STUB_MYSQL_DATADIR:-/var/lib/mysql/}" ;;
   "SELECT SUBSTRING_INDEX"*) echo "${STUB_MYSQL_USER:-devnel_restoretest}" ;;
   "USE "*)

@@ -18,5 +18,5 @@ case "$1 $2 ${3:-}" in
       *"option_name = 'siteurl'"*) echo "${STUB_PROD_SITEURL:-https://devnel.blog}" ;;
     esac
     ;;
-  "eval "*) echo "ALERT subject=${DEVNEL_ALERT_SUBJECT:-} to=${DEVNEL_ALERT_TO:-}" >>"$STUB_LOG" ;;
+  "eval "*) echo "ALERT subject=${DEVNEL_ALERT_SUBJECT:-} to=${DEVNEL_ALERT_TO:-} body=${DEVNEL_ALERT_BODY:-}" >>"$STUB_LOG" ;;
 esac
