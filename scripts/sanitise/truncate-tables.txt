@@ -1,0 +1,11 @@
+# Tables emptied completely by the sanitiser, and checked empty by check-sanitised.sh.
+# Names include the table prefix (wp_). Entries are LIKE patterns, where "!" escapes the next
+# character, so "!_" is a literal underscore.
+# Keep wp_redirection_items and wp_redirection_groups: the redirects must survive.
+wp!_post!_smtp!_logs
+wp!_post!_smtp!_logmeta
+wp!_redirection!_404
+wp!_redirection!_logs
+wp!_jetpack!_waf!_blocklog
+# Jetpack CRM: contacts, invoices and transactions are PII by design
+wp!_zbs!_%

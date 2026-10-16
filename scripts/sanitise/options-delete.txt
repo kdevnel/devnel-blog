@@ -1,0 +1,86 @@
+# wp_options rows removed by the sanitiser, and checked absent by check-sanitised.sh.
+# One entry per line. An entry with neither % nor ! matches the option name exactly; otherwise it
+# is a LIKE pattern in which "!" escapes the next character (so "!_" is a literal underscore).
+# Option names only: never put a value here.
+
+# ActivityPub actor private keys: a leak would let someone impersonate the blog on the fediverse
+activitypub_application_keypair
+activitypub!_keypair!_for!_%
+
+# ManageWP worker
+mwp!_%
+!_worker!_%
+
+# Friends
+friends_private_rss_key
+friends_codeword
+
+# Mail-by-post credentials and addresses
+mailserver_login
+mailserver_pass
+mailserver_url
+post_by_email_address%
+
+# Post SMTP
+postman_options
+postman_state
+postman_rat
+post_smtp_webhook_urls
+
+# Spam and polling API keys
+wordpress_api_key
+crowdsignal_api_key
+crowdsignal_user_code
+
+# UpdraftPlus remote storage and account
+updraft_s3
+updraft_s3generic
+updraft_googledrive
+updraft_dropbox
+updraft_ftp
+updraft_sftp
+updraft_webdav
+updraft_azure
+updraft_backblaze
+updraft_onedrive
+updraft_pcloud
+updraft_openstack
+updraft_cloudfiles
+updraft_dreamobjects
+updraft_googlecloud
+updraft_updraftvault
+updraft_email
+updraftplus-addons_siteid
+
+# Offload plugins
+tantan_wordpress_s3
+as3cf_constant_AS3CF_SETTINGS
+
+# Freemius, Jetpack
+fs_accounts
+jetpack_private_options
+
+# Keys and salts stored in the database
+nonce_key
+nonce_salt
+auth_key
+secure_auth_key
+logged_in_key
+%!_salt
+
+# Jetpack connection nonces
+jetpack!_nonce!_%
+
+# Mailing-list widget settings, which can hold list or form keys
+widget_widget_mailchimp_subscriber_popup
+widget_wpcom-mailerlite
+
+# Core update notices record the admin email
+auto_core_update_notified
+
+# Recovery mode
+recovery_keys
+
+# Transients can cache API responses
+!_transient!_%
+!_site!_transient!_%

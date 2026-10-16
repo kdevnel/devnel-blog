@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+# Stub docker for the pull-db and check-sanitised tests. Records every call (full arguments) in
+# STUB_LOG. STUB_DOCKER_DOWN=1: `docker info` fails. STUB_DOCKER_RUN_FAIL=1: `docker run` fails.
+# STUB_PING_FAIL=1: mysqladmin ping never succeeds. STUB_DUMP_FAIL=1: mysqldump fails.
+# SQL sent to `docker exec -i <c> mysql` is handled by _sql_responder.
+echo "docker $*" >>"${STUB_LOG:?}"
+here="$(dirname "${BASH_SOURCE[0]}")"
+case "$1" in
+  info) [[ "${STUB_DOCKER_DOWN:-}" != 1 ]] ;;
+  run)
+    [[ "${STUB_DOCKER_RUN_FAIL:-}" != 1 ]] || exit 1
+    echo "stub-container-id"
+    ;;
+  rm) ;;
+  exec)
+    shift
+    [[ "$1" == "-i" ]] && shift
+    shift # the container name
+    case "$1" in
+      mysqladmin) [[ "${STUB_PING_FAIL:-}" != 1 ]] ;;
+      mysqldump)
+        [[ "${STUB_DUMP_FAIL:-}" != 1 ]] || exit 1
+        echo "-- sanitised stub dump"
+        ;;
+      mysql) exec "$here/_sql_responder" container ;;
+    esac
+    ;;
+esac

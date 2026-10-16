@@ -9,6 +9,13 @@
     "node": ">=22"
   },
   "scripts": {
+    "env:start": "bash scripts/env-start.sh",
+    "env:stop": "wp-env stop",
+    "env:reset": "wp-env clean all",
+    "env:sync": "bash scripts/sync-env-versions.sh",
+    "db:pull": "bash scripts/pull-db.sh",
+    "db:check": "bash scripts/check-sanitised.sh",
+    "uploads:pull": "bash scripts/pull-uploads.sh",
     "lint": "npm run lint:js && npm run lint:css && npm run lint:format",
     "lint:js": "eslint .",
     "lint:css": "stylelint \"theme/**/*.css\" --allow-empty-input",

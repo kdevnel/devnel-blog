@@ -1,0 +1,31 @@
+# rsync exclude patterns for scripts/pull-uploads.sh (--exclude-from; paths are relative to
+# wp-content/uploads, a leading / anchors them there). Everything else in uploads is copied as is:
+# media is public on the live site. This list keeps private plugin files out of wp-env, which
+# publishes its ports on all interfaces (docs/LOCAL.md).
+
+# Jetpack CRM (Zero BS CRM), from the plugin source (zero-bs-crm):
+#   zbscrm-store/ holds client files and the _wip import area (Migrations: "zbscrm-store/_wip/");
+#   jpcrm-storage/ is the folder it moved to in 5.6 (FileUploads: private_dir_name, normally under
+#   wp-content, excluded here as well in case it is under uploads);
+#   invoices/ holds the generated invoice PDFs (InvoiceBuilder: uploads basedir + /invoices/).
+/zbscrm-store/
+/jpcrm-storage/
+/invoices/
+
+# Form and contact plugins that keep submissions or attachments under uploads (defensive: not
+# looked up in plugin source; none is known to be installed)
+/jetpack-contact-form*/
+/grunion*/
+/wpforms/
+/gravity_forms/
+/ninja-forms/
+/cfdb7_uploads/
+
+# Mail logs, backups and archives
+/post-smtp*/
+/updraft/
+/backup*/
+*.sql
+*.sql.*
+*.log
+*.zip
