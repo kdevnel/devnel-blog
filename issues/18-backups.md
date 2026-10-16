@@ -35,12 +35,12 @@ Out: other sites (config-driven so they can be added later), UpdraftPlus configu
 
 ## Acceptance criteria
 - [x] Bats tests pass (see below): `bats tests/shell/` (50 tests) and `shellcheck` clean.
-- [ ] On Triton (human-gated install): a manual run produces a dump whose first line is `-- MySQL dump`, a wp-content archive, an off-site copy, and a heartbeat ping.
-- [ ] `restore-test.sh` passes against that dump on Triton and reports counts matching production.
+- [x] On Triton (human-gated install): a manual run produces a dump whose first line is `-- MySQL dump`, a wp-content archive, an off-site copy, and a heartbeat ping.
+- [x] `restore-test.sh` passes against that dump on Triton and reports counts matching production.
 - [ ] A full restore into wp-env from the off-site copy works, following `docs/runbooks/restore.md`.
 - [x] Retention deletes old files (Bats with fake timestamps) and the disk check aborts when space is low.
-- [ ] No password in `ps` output or in the script; config files mode 600.
-- [ ] After cleanup, `~/devnel.blog/backups` is under 1 GB and disk usage drops accordingly.
+- [x] No password in `ps` output or in the script; config files mode 600.
+- [x] After cleanup, `~/devnel.blog/backups` is under 1 GB and disk usage drops accordingly.
 
 ## Tests required
 - Bats with stubbed `mysqldump`, `gzip`, `rclone`, `curl`, `wp`, `df`: success path; mysqldump failure → no file replaced, alert sent, non-zero exit; corrupt gzip detected; low disk aborts; retention selects the right files; marker written only on success.
@@ -72,6 +72,17 @@ Out: other sites (config-driven so they can be added later), UpdraftPlus configu
 3. First manual run and restore test.
 4. Deleting the old backlog (after 2 weeks of new backups).
 
+## Install log (Triton)
+Figures (sizes, disk, memory, timings) are in `../devnel-ops`; this log only records what was done and whether it passed.
+
+- **2026-10-15, steps 1–6** (Kyle): Healthchecks checks created on healthchecks.io (cron schedules, `Africa/Johannesburg`). Scripts copied to `~/scripts/devnel-backup/`, checksums match `main`. Restore-test MySQL user with grants on the scratch DB only (`USE` on production denied). Both defaults files and the site config are mode 600. rclone installed from the Ubuntu archive; `devnel-drive` (drive.file scope, trash bypassed) and `devnel-crypt` remotes created by Kyle; `rclone.conf` mode 600; round-trip test passed.
+- **Step 7:** manual `db` and `files` runs succeeded: the dump's line 1 is `-- MySQL dump`, a wp-content archive and the nginx config copy were written, off-site copies exist, the marker was written, and no heartbeat warnings appear in the log. `ps` during the dump showed `--defaults-extra-file=…` and no password.
+- **Step 7b:** a forced failure (`DB_NAME='nonexistent_db'`) exited 2 with nothing written; the config was restored afterwards. Kyle still has to confirm that the alert email and the healthchecks.io `/fail` arrived.
+- **Step 8:** the first restore test's import pushed MySQL memory far enough that the OOM killer killed production `mysqld`, which was down for about a minute (devnel-ops known problem 8). Kyle added swap. Reruns under an external memory watchdog passed for both local and `--offsite` dumps: table count, published count and `siteurl` matched production, MySQL didn't restart, and the scratch DB was dropped.
+- **Step 9a** (Kyle approved): the legacy devnel.blog crontab line was replaced by the daily DB and weekly files lines; the other site's line is unchanged; the crontab backup is on Triton. **Step 9b (restore-test lines) is held** until `restore-test.sh` guards memory itself (branch `issue/18-restore-memory-guard`).
+- **2026-10-16:** the first scheduled DB run (03:15) succeeded: dump, off-site copy, local and off-site pruning, marker.
+- **2026-10-16, cleanup phase 1** (Kyle approved): the dry run was checked again, then 62 legacy files were deleted. The newest legacy pair is kept, so the directory is well under 1 GB and disk usage dropped accordingly. Phase 2 is due around **2026-10-29**.
+
 ## Follow-ups
 - UpdraftPlus isn't the off-site mechanism (decision above). Decide whether to deactivate/remove it in issue 15.
 
@@ -88,3 +99,9 @@ Out: other sites (config-driven so they can be added later), UpdraftPlus configu
 - (review r3 nit) `deploy/cron/backup.cron`: the monthly off-site restore test uses `flock -n` on the weekly test's lock, so if the 04:00 run overruns it skips with no alert, and the shared `RESTORE_HEARTBEAT_URL` stays green. Give it its own heartbeat or `flock -w`.
 - (review r3 nit) `restore-test.sh --offsite` downloads into `${TMPDIR:-/tmp}` (same filesystem as `/`) with no free-space check before the download.
 - (review r3 nit) `backup-install.md` step 9: the `~/crontab.before-backups-*` glob breaks if the step is rerun on another day; the quoted legacy cron line has one space before `>/dev/null` where the real one has two (the `grep -vF` pattern is unaffected).
+- (install) Restore-test memory guard before the restore-test cron lines go in: in progress on `issue/18-restore-memory-guard`. Then step 9b.
+- (install) Kyle to confirm the step 7b alert email arrived. If it didn't, check the site's SMTP plugin first.
+- (install) When mysqldump fails, `backup.sh` reports `command failed: gzip -c > $tmp`. It names the last stage of the pipeline, not the stage that failed. Report the failing stage (`PIPESTATUS`), or say "dump pipeline failed" and point to the log's mysqldump stderr.
+- (install, issue 15) The published count the restore test compares covers every post type, and it's far larger than the site's posts and pages. Most of it is probably items the Friends plugin has stored. It's why the dump is so large. Look at it in housekeeping.
+- (install) Cleanup phase 2 around 2026-10-29, after two weeks of new backups and at least two weekly restore-test passes. That needs 9b in place by then, or manual runs.
+- (install) The wp-env restore rehearsal still waits for issue 02.
