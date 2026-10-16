@@ -31,7 +31,7 @@ scratch_dropped() { grep -q 'DROP DATABASE IF EXISTS `devnel_blog_restoretest`' 
   [ "$status" -ne 0 ]
   [[ "$output" == *"table count differs"* ]]
   scratch_dropped
-  [ "$(grep -c 'DROP DATABASE' "$STUB_LOG")" -ge 2 ]
+  [ "$(grep -c 'DROP DATABASE IF EXISTS `devnel_blog_restoretest`' "$STUB_LOG")" -ge 2 ]
   grep -q 'ALERT subject=\[devnel-backup\] RESTORE TEST FAILED' "$STUB_LOG"
   grep -q 'restore-uuid/fail' "$STUB_LOG"
 }
@@ -485,6 +485,25 @@ send_signal_during_import() {
   [ "$rc" -eq 143 ]
   grep -q 'ALERT .*body=import aborted: memory headroom fell to 200 MB (floor 512 MB); then interrupted by signal TERM' "$STUB_LOG"
   # the TERM-ignoring import (stub and its sleep) must not survive the script
+  read -r stub_pid sleep_pid <"$STUB_MYSQL_PIDFILE"
+  ! kill -0 "$stub_pid" 2>/dev/null || false
+  ! kill -0 "$sleep_pid" 2>/dev/null || false
+}
+
+@test "watchdog: escalates to KILL by itself when the import ignores TERM (no signal to the script)" {
+  write_config "RESTORE_MEM_POLL_SECONDS=1"
+  export STUB_MYSQL_IMPORT_SLEEP=30 STUB_MYSQL_PIDFILE="$BATS_TEST_TMPDIR/import.pids"
+  export STUB_MYSQL_IGNORE_TERM=1
+  export STUB_MYSQL_IMPORT_MEMINFO="$MEMINFO_FILE"
+  export STUB_MYSQL_IMPORT_MEMINFO_TEXT='MemAvailable: 204800 kB\nSwapFree: 0 kB\n'
+  local start=$SECONDS
+  run "$RESTORE_SH" test
+  # `run` holds the output pipe open until every child exits, so a surviving import would
+  # keep this waiting for the stub's 30 s sleep: the time bound is what proves the KILL.
+  [ $((SECONDS - start)) -lt 15 ]
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"import aborted: memory headroom fell to 200 MB (floor 512 MB)"* ]] || false
+  [ "$(grep -c 'DROP DATABASE IF EXISTS `devnel_blog_restoretest`' "$STUB_LOG")" -ge 2 ]
   read -r stub_pid sleep_pid <"$STUB_MYSQL_PIDFILE"
   ! kill -0 "$stub_pid" 2>/dev/null || false
   ! kill -0 "$sleep_pid" 2>/dev/null || false

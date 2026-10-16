@@ -217,6 +217,16 @@ Rollback: `crontab "$BEFORE"` (the file name printed above).
 
 ### 9b. Restore-test lines
 
+First copy the `restore-test.sh` and `lib.sh` that have the memory guard (from `main`) and check them:
+
+```sh
+scp scripts/backup/restore-test.sh scripts/backup/lib.sh triton.devnel.com:scripts/devnel-backup/   # from a checkout of main
+ssh triton.devnel.com 'cd ~/scripts/devnel-backup && sha256sum restore-test.sh lib.sh && grep -c RESTORE_MIN_MEM_MB restore-test.sh && command -v pgrep'
+sha256sum scripts/backup/restore-test.sh scripts/backup/lib.sh   # must match
+```
+
+Then run it once by hand (`~/scripts/devnel-backup/restore-test.sh devnel.blog`). It must pass and log `memory headroom: … at start, lowest … during import`.
+
 ```sh
 BEFORE=~/crontab.before-restoretest-$(date +%F-%H%M%S)
 crontab -l > "$BEFORE"

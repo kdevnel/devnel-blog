@@ -4,9 +4,10 @@
 # STUB_MYSQL_FAIL_CREATE=1 fails CREATE DATABASE; STUB_MYSQL_IMPORT_RC fails the import.
 # STUB_MYSQL_IMPORT_SLEEP=<s> makes the import hang that long; if STUB_MYSQL_IMPORT_MEMINFO is set,
 # that file is first overwritten with STUB_MYSQL_IMPORT_MEMINFO_TEXT. STUB_MYSQL_PIDFILE receives
+# "<stub pid> <sleep pid>" so tests can prove the import was killed.
 # STUB_MYSQL_IGNORE_TERM=1 makes the hanging import ignore TERM (killed only by KILL).
 # STUB_MYSQL_DROP_SLEEP=<s> makes the cleanup DROP (the "SET SESSION" statement) slow and logs
-# "mysql DROP SLOW" before and "mysql DROP DONE" after. STUB_MYSQL_PIDFILE receives "<stub pid> <sleep pid>" so tests can prove the import was killed.
+# "mysql DROP SLOW" before and "mysql DROP DONE" after.
 sql=""
 args=("$@")
 for i in "${!args[@]}"; do
