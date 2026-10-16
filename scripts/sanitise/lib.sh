@@ -20,6 +20,12 @@ SAN_IPV4_RE='(?<![0-9])(?!127[.]0[.]0[.]1(?![0-9]))(25[0-5]|2[0-4][0-9]|1[0-9][0
 # An IPv6 address, full or compressed.
 SAN_IPV6_RE='(?<![0-9a-f:])(([0-9a-f]{1,4}:){7}[0-9a-f]{1,4}|([0-9a-f]{1,4}:){1,6}(:[0-9a-f]{1,4}){1,6}|([0-9a-f]{1,4}:){1,7}:|:(:[0-9a-f]{1,4}){1,7})(?![0-9a-f:])'
 
+# Conditions for the three patterns. The cheap LIKE runs first so the (slow) regular expression only
+# sees values that could match.
+san_email_cond() { printf "(%s LIKE '%%@%%' AND %s REGEXP '%s')" "$1" "$1" "$SAN_EMAIL_RE"; }
+san_ipv4_cond() { printf "(%s LIKE '%%.%%.%%.%%' AND %s REGEXP '%s')" "$1" "$1" "$SAN_IPV4_RE"; }
+san_ipv6_cond() { printf "(%s LIKE '%%:%%:%%' AND %s REGEXP '%s')" "$1" "$1" "$SAN_IPV6_RE"; }
+
 san_err() { printf 'error: %s\n' "$*" >&2; }
 
 # san_entries <file>: the entries of a list file, without comments and blank lines. Entries are
@@ -63,15 +69,32 @@ san_sanitise_sql() {
   local p="$SAN_PREFIX" um opt
   um="$(san_cond_all meta_key "$SAN_DIR/usermeta-delete.txt")"
   opt="$(san_cond_all option_name "$SAN_DIR/options-delete.txt")"
+  local types
+  types="$(san_cond_all p.post_type "$SAN_DIR/posts-delete-types.txt")"
   printf '%s\n' '-- devnel-sanitise'
+  # Cached third-party content (remote ActivityPub actors, Friends feed items): removed with
+  # everything that hangs off it, then the posts themselves.
+  printf '%s\n' "DELETE cm FROM \`${p}commentmeta\` cm JOIN \`${p}comments\` c ON c.comment_ID = cm.comment_id JOIN \`${p}posts\` p ON p.ID = c.comment_post_ID WHERE $types;"
+  printf '%s\n' "DELETE c FROM \`${p}comments\` c JOIN \`${p}posts\` p ON p.ID = c.comment_post_ID WHERE $types;"
+  printf '%s\n' "DELETE pm FROM \`${p}postmeta\` pm JOIN \`${p}posts\` p ON p.ID = pm.post_id WHERE $types;"
+  printf '%s\n' "DELETE tr FROM \`${p}term_relationships\` tr JOIN \`${p}posts\` p ON p.ID = tr.object_id WHERE $types;"
+  printf '%s\n' "DELETE p FROM \`${p}posts\` p WHERE $types;"
+  # Contact-form and payment-button recipients.
+  printf '%s\n' "DELETE FROM \`${p}postmeta\` WHERE $(san_cond_all meta_key "$SAN_DIR/postmeta-delete.txt");"
+  # Any other email address in a post's text (the author's public contact address, examples in
+  # revisions) is replaced, not kept: the local copy has no use for real addresses.
+  local col
+  for col in post_title post_excerpt post_content; do
+    printf '%s\n' "UPDATE \`${p}posts\` SET $col = REGEXP_REPLACE($col, '$SAN_EMAIL_RE', 'redacted@example.test') WHERE $(san_email_cond "$col");"
+  done
   # Users: emails anonymised, passwords replaced by random hashes, activation keys emptied.
   # user_url, user_login and display names are public and stay.
   printf '%s\n' "UPDATE \`${p}users\` SET user_email = CONCAT('user', ID, '@example.test'), user_pass = CONCAT('\$P\$B', SUBSTRING(SHA2(CONCAT(UUID(), RAND(), ID), 256), 1, 30)), user_activation_key = '';"
   printf '%s\n' "DELETE FROM \`${p}usermeta\` WHERE $um OR meta_value LIKE '%-----BEGIN%';"
-  printf '%s\n' "UPDATE \`${p}usermeta\` SET meta_value = CONCAT('meta', umeta_id, '@example.test') WHERE meta_value REGEXP '$SAN_EMAIL_RE';"
+  printf '%s\n' "UPDATE \`${p}usermeta\` SET meta_value = CONCAT('meta', umeta_id, '@example.test') WHERE $(san_email_cond meta_value);"
   # Comments: emails, IPs and user agents.
   printf '%s\n' "UPDATE \`${p}comments\` SET comment_author_email = CONCAT('commenter', comment_ID, '@example.test'), comment_author_IP = '127.0.0.1', comment_agent = '';"
-  printf '%s\n' "DELETE FROM \`${p}commentmeta\` WHERE meta_value REGEXP '$SAN_EMAIL_RE' OR meta_value REGEXP '$SAN_IPV4_RE' OR meta_value REGEXP '$SAN_IPV6_RE';"
+  printf '%s\n' "DELETE FROM \`${p}commentmeta\` WHERE $(san_email_cond meta_value) OR $(san_ipv4_cond meta_value) OR $(san_ipv6_cond meta_value);"
   # Options: secrets, keys, salts, transients, and any stored PEM block.
   printf '%s\n' "DELETE FROM \`${p}options\` WHERE $opt OR option_value LIKE '%-----BEGIN%';"
   printf '%s\n' "UPDATE \`${p}options\` SET option_value = 'admin@example.test' WHERE option_name IN ('admin_email', 'new_admin_email');"
@@ -82,8 +105,9 @@ san_sanitise_sql() {
 san_run() {
   case "$1" in
     container:*)
+      # MySQL aborts a regular expression that takes too long; the data here is checked in full.
       docker exec -i "${1#container:}" mysql -uroot --batch --skip-column-names \
-        --default-character-set=utf8mb4 "$SAN_DB"
+        --default-character-set=utf8mb4 --init-command='SET GLOBAL regexp_time_limit = 0' "$SAN_DB"
       ;;
     wpenv)
       # shellcheck disable=SC2086 # WP_ENV is a command prefix such as "npx wp-env"
@@ -106,17 +130,25 @@ SELECT table_name FROM information_schema.tables WHERE table_schema = DATABASE()
 SQL
 }
 
+# san_delete_options <target>: delete the options on the list (not the rest of the sanitising).
+san_delete_options() {
+  {
+    printf '%s\n' '-- devnel-sanitise-options'
+    printf '%s\n' "DELETE FROM \`${SAN_PREFIX}options\` WHERE $(san_cond_all option_name "$SAN_DIR/options-delete.txt");"
+  } | san_run "$1"
+}
+
 # san_sanitise <target>: sanitise the database behind a target.
 san_sanitise() {
   local target="$1" tables t sql
   sql="$(san_sanitise_sql)"
-  printf '%s\n' "$sql" | san_run "$target"
-  tables="$(san_tables_like "$target" "$SAN_DIR/truncate-tables.txt")"
+  printf '%s\n' "$sql" | san_run "$target" || return 1
+  tables="$(san_tables_like "$target" "$SAN_DIR/truncate-tables.txt")" || return 1
   if [[ -n "$tables" ]]; then
     {
       printf '%s\n' '-- devnel-sanitise-truncate' 'SET FOREIGN_KEY_CHECKS = 0;'
       # shellcheck disable=SC2016 # the backticks are SQL
       while IFS= read -r t; do printf 'TRUNCATE TABLE `%s`;\n' "$t"; done <<<"$tables"
-    } | san_run "$target"
+    } | san_run "$target" || return 1
   fi
 }

@@ -61,6 +61,9 @@ The list lives once, in `scripts/sanitise/*.txt`, and is used by both the saniti
 | `wp_comments` | `comment_author_email` becomes `commenterN@example.test`; `comment_author_IP` becomes `127.0.0.1`; `comment_agent` is emptied |
 | `wp_commentmeta` | rows holding an email or an IP are deleted |
 | Emptied tables | Post SMTP logs, Redirection 404s and logs, the Jetpack WAF log, and every `wp_zbs_*` (Jetpack CRM) table. `wp_redirection_items` and `wp_redirection_groups` stay |
+| Cached third-party posts | posts of type `ap_actor`, `ap_inbox`, `ap_outbox` and `friend_post_cache` are removed with their meta, term relationships and comments. ActivityPub caches every remote actor (profiles, bios, public keys) and Friends caches its friends' feed items; none of it is this blog's content and it is re-fetched on demand (`scripts/sanitise/posts-delete-types.txt`) |
+| `wp_postmeta` | contact-form and payment-button recipient addresses (`_g_feedback_shortcode*`, `spay_email`) are deleted (`postmeta-delete.txt`) |
+| `wp_posts` text | any email address left in a post's title, excerpt or content (the author's public contact address, examples in revisions) becomes `redacted@example.test` |
 | `wp_options` | secrets and keys are deleted (ActivityPub key pairs, ManageWP, Friends keys, mail-by-post and Post SMTP credentials, API keys, UpdraftPlus remote storage, S3 offload, Freemius, Jetpack private options, salts and keys stored in the DB, recovery keys, transients); `admin_email` becomes `admin@example.test`; any option holding a PEM block is deleted |
 | Plugins | `worker`, `post-smtp`, `updraftplus`, `nginx-cache` and `redis-cache` are deactivated in wp-env |
 
@@ -69,10 +72,12 @@ The list lives once, in `scripts/sanitise/*.txt`, and is used by both the saniti
 - an email-shaped string that is not an `@example.test` address, in any text column of any table;
 - an IPv4 or IPv6 address in the comments tables (other than `127.0.0.1`);
 - a `-----BEGIN` PEM block in any text column;
-- an option or usermeta key from the lists above;
+- an option, usermeta key, postmeta key or post type from the lists above;
 - a row in a table that should be empty.
 
-Because it is strict, a post that quotes an email address or an IP will make the check fail and name the column. That is deliberate: look at that content before relaxing the check.
+Because it is strict, anything the sanitiser doesn't know about, such as a new plugin that stores email addresses in a column, makes the check fail and name the table and column. That is deliberate: add a rule to `scripts/sanitise/` (and a test) rather than relaxing the check. Email addresses in post text are replaced by the sanitiser, so they don't trip it.
+
+The pull deletes the listed options once more in wp-env just before the final check: WordPress and plugins write fresh transients (and may regenerate their own keys) while the pull runs, and those hold nothing from production.
 
 Sanitised does not mean anonymous: post and page content, comment text, names, comment author URLs, usernames and the structure of the site are the real thing. Treat `.data/` as private anyway.
 
@@ -89,6 +94,12 @@ wp-env 11 publishes (via Docker Compose) these ports on **all interfaces** (`0.0
 wp-env has no setting to bind these to `127.0.0.1` or to turn the MySQL port off (`mysqlPort` only chooses the number, and the port environment variables must be plain numbers). So anything on your network can reach the local site and its database while wp-env runs. This is acceptable only because **only sanitised data ever reaches wp-env** (see above): there is no PII or secret in it to leak. Use a trusted network or your OS firewall if you care about someone tampering with the local copy.
 
 The throwaway sanitising container, which does hold raw data for a short time, publishes nothing and has no network.
+
+## Known differences from production
+
+- wp-env's database is MariaDB (wp-env 11 offers no MySQL), while production runs MySQL 8.4. The sanitising container uses `mysql:8.4` to match production; the sanitised dump imports cleanly into wp-env's MariaDB. SQL quirks that differ between the two will not show locally.
+- No Redis object cache, nginx page cache or system cron, and no mail delivery.
+- Plugins that don't run locally are listed under "Versions" above.
 
 ## Uploads
 

@@ -9,6 +9,7 @@
 #   STUB_CHECK_OUTPUT what the check query prints (default nothing = clean); the per-target
 #                     STUB_CHECK_OUTPUT_container and STUB_CHECK_OUTPUT_wpenv take precedence
 #   STUB_POSTS        result of SELECT COUNT(*) FROM wp_posts (default 5)
+#   STUB_SANITISE_RC  exit code for the sanitising SQL (default 0)
 #   STUB_IMPORT_RC    exit code for a raw SQL stream (the production dump)
 target="$1"
 sql="$(cat)"
@@ -20,9 +21,14 @@ case "$first" in
     echo "$target sanitise-truncate" >>"${STUB_LOG:?}"
     printf '%s\n' "$sql" >"$dir/sql-$n-truncate.sql"
     ;;
+  "-- devnel-sanitise-options")
+    echo "$target sanitise-options" >>"${STUB_LOG:?}"
+    printf '%s\n' "$sql" >"$dir/sql-$n-options.sql"
+    ;;
   "-- devnel-sanitise")
     echo "$target sanitise" >>"${STUB_LOG:?}"
     printf '%s\n' "$sql" >"$dir/sql-$n-sanitise.sql"
+    exit "${STUB_SANITISE_RC:-0}"
     ;;
   "-- devnel-check")
     echo "$target check" >>"${STUB_LOG:?}"

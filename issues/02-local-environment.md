@@ -65,3 +65,16 @@ Kyle approved streaming the export "as long as it's secure". Where these differ 
 None (read-only export).
 
 ## Follow-ups
+
+### Added during implementation (needs the lead's ack)
+The first real run showed the decisions' list was not enough for the check to pass, so the sanitiser also does the following (all data-driven, in `scripts/sanitise/`, and tested):
+- Removes cached third-party posts (`ap_actor`, `ap_inbox`, `ap_outbox`, `friend_post_cache`) with their meta, term relationships and comments. ActivityPub's remote-actor cache is by far the largest table content and holds other people's profiles, bios with email addresses and public keys.
+- Deletes postmeta keys that hold contact-form and payment recipients (`_g_feedback_shortcode*`, `spay_email`) and the option `auto_core_update_notified` (it records the admin email).
+- Replaces any remaining email address in `post_title`, `post_excerpt` and `post_content` with `redacted@example.test` instead of allowlisting the author's public address, so no real address is committed to this public repository.
+- Before the final wp-env check, deletes the listed options once more, because WordPress writes fresh transients during the pull.
+- The email and PEM checks scan every text column of every table, not only the tables named in the decisions.
+
+Noted for later:
+- wp-env publishes its ports on all interfaces and has no setting to change that (see `docs/LOCAL.md`).
+- `friends-autoresolve-links` and `friends-post-collection` have no wordpress.org zip, so they are not installed locally.
+- `CLAUDE.md`'s command list could mention `env:sync`, `db:check` and `uploads:pull` (not edited here).

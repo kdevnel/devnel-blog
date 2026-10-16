@@ -67,6 +67,9 @@ secure_auth_key
 logged_in_key
 %!_salt
 
+# Core update notices record the admin email
+auto_core_update_notified
+
 # Recovery mode
 recovery_keys
 

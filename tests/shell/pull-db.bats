@@ -96,6 +96,16 @@ run_pull() { run "$PULL"; }
   container_removed
 }
 
+@test "a failing sanitise step aborts before the check and the export, with wp-env untouched" {
+  STUB_SANITISE_RC=1 run_pull
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"sanitising failed"* ]]
+  ! grep -q '^container check$' "$STUB_LOG"
+  ! grep -q 'mysqldump' "$STUB_LOG"
+  nothing_in_wpenv
+  container_removed
+}
+
 @test "ssh failure: non-zero, container removed, wp-env untouched, no snapshot" {
   STUB_SSH_RC=255 run_pull
   [ "$status" -ne 0 ]
@@ -224,6 +234,21 @@ run_pull() { run "$PULL"; }
   for p in worker post-smtp updraftplus nginx-cache redis-cache; do
     grep -qxF "wp-env wp plugin deactivate $p" "$STUB_LOG"
   done
+}
+
+@test "options WordPress or plugins write locally are deleted again just before the final wp-env check" {
+  run_pull
+  [ "$status" -eq 0 ]
+  cleanup="$(line_no '^wpenv sanitise-options$')"
+  wpenv_check="$(line_no '^wpenv check$')"
+  deactivate="$(line_no '^wp-env wp plugin deactivate')"
+  [ -n "$cleanup" ]
+  [ "$deactivate" -lt "$cleanup" ]
+  [ "$cleanup" -lt "$wpenv_check" ]
+  sql="$(cat "$STUB_SQL_DIR"/sql-*-options.sql)"
+  [[ "$sql" == *"DELETE FROM \`wp_options\`"*"_transient"* ]]
+  # only options are touched
+  [[ "$sql" != *"wp_users"* && "$sql" != *"wp_posts"* ]]
 }
 
 @test "check-sanitised runs against the container and again against wp-env at the end" {

@@ -159,6 +159,11 @@ while IFS= read -r plugin; do
   wpenv plugin deactivate "$plugin" >/dev/null 2>&1 || log "note: $plugin not active or not installed locally"
 done < <(san_entries "$SAN_DIR/deactivate-plugins.txt")
 
+# WordPress writes fresh transients (and plugins may regenerate their own keys) while the commands
+# above run. They hold nothing from production, but the check rightly refuses them, so remove them
+# again: the same DELETE the sanitiser ran.
+san_delete_options wpenv || die "could not clear locally generated options"
+
 log "checking wp-env"
 "$CHECK_SCRIPT" --wp-env || die "wp-env failed the sanitisation check"
 

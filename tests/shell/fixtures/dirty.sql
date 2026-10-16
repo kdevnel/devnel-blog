@@ -49,7 +49,8 @@ CREATE TABLE wp_comments (
 );
 INSERT INTO wp_comments (comment_post_ID, comment_author, comment_author_email, comment_author_url, comment_author_IP, comment_content, comment_agent) VALUES
   (1, 'Carol', 'carol@elsewhere.example.net', 'https://carol.example.net', '203.0.113.7', 'Nice post, version 2.0 is out', 'Mozilla/5.0 (fake)'),
-  (1, 'Dave', 'dave@elsewhere.example.net', '', '2001:db8::1', 'Agreed', 'Mozilla/5.0 (fake)');
+  (1, 'Dave', 'dave@elsewhere.example.net', '', '2001:db8::1', 'Agreed', 'Mozilla/5.0 (fake)'),
+  (3, 'Remote', 'remote@elsewhere.example.net', '', '203.0.113.9', 'Comment on a cached actor', '');
 
 CREATE TABLE wp_commentmeta (
   meta_id bigint unsigned NOT NULL AUTO_INCREMENT PRIMARY KEY,
@@ -61,6 +62,7 @@ INSERT INTO wp_commentmeta (comment_id, meta_key, meta_value) VALUES
   (1, 'akismet_as_submitted', 'a:2:{s:5:"email";s:26:"carol@elsewhere.example.net";s:2:"ip";s:11:"203.0.113.7";}'),
   (1, 'ip_only', '198.51.100.9'),
   (2, 'v6_only', '2001:db8:0:0:0:0:0:2'),
+  (3, 'on_cached_actor', 'harmless'),
   (2, 'akismet_result', 'false');
 
 CREATE TABLE wp_options (
@@ -109,18 +111,45 @@ INSERT INTO wp_options (option_name, option_value) VALUES
   ('_transient_feed_abc', 'cached'),
   ('_site_transient_update_core', 'cached'),
   ('some_plugin_blob', CONCAT('-----BE', 'GIN FAKE-----')),
+  ('auto_core_update_notified', 'a:1:{s:5:"email";s:22:"owner@corp.example.org";}'),
   ('blogdescription', 'Just another test');
 
 CREATE TABLE wp_posts (
   ID bigint unsigned NOT NULL AUTO_INCREMENT PRIMARY KEY,
   post_title text NOT NULL,
   post_content longtext NOT NULL,
+  post_excerpt text,
   post_status varchar(20) NOT NULL DEFAULT 'publish',
   post_type varchar(20) NOT NULL DEFAULT 'post'
 );
 INSERT INTO wp_posts (post_title, post_content, post_status, post_type) VALUES
   ('Hello', '<!-- wp:paragraph --><p>Hello there, 3.14 is pi</p><!-- /wp:paragraph -->', 'publish', 'post'),
-  ('About', '<!-- wp:paragraph --><p>About page</p><!-- /wp:paragraph -->', 'publish', 'page');
+  ('About', '<!-- wp:paragraph --><p>About page</p><!-- /wp:paragraph -->', 'publish', 'page'),
+  ('Remote actor', CONCAT('{"bio":"mail actor@mail.invalid","key":"-----BE', 'GIN FAKE-----"}'), 'publish', 'ap_actor'),
+  ('Outbox item', 'cached activity', 'publish', 'ap_outbox'),
+  ('Friend item', 'cached feed item', 'publish', 'friend_post_cache'),
+  ('Hello', 'Old draft: write to owner@corp.example.org, or x@example.com', 'inherit', 'revision');
+
+CREATE TABLE wp_postmeta (
+  meta_id bigint unsigned NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  post_id bigint unsigned NOT NULL DEFAULT 0,
+  meta_key varchar(255) DEFAULT NULL,
+  meta_value longtext
+);
+INSERT INTO wp_postmeta (post_id, meta_key, meta_value) VALUES
+  (1, '_thumbnail_id', '12'),
+  (1, '_g_feedback_shortcode_abc123', 'a:1:{s:2:"to";s:22:"owner@corp.example.org";}'),
+  (2, 'spay_email', 'seller@corp.example.org'),
+  (3, '_activitypub_acct', 'actor@mail.invalid'),
+  (4, 'cached', 'x'),
+  (5, 'cached', 'x');
+
+CREATE TABLE wp_term_relationships (
+  object_id bigint unsigned NOT NULL DEFAULT 0,
+  term_taxonomy_id bigint unsigned NOT NULL DEFAULT 0,
+  PRIMARY KEY (object_id, term_taxonomy_id)
+);
+INSERT INTO wp_term_relationships VALUES (1, 1), (3, 1), (5, 1);
 
 CREATE TABLE wp_post_smtp_logs (id int PRIMARY KEY, to_header text);
 INSERT INTO wp_post_smtp_logs VALUES (1, 'someone@corp.example.org');

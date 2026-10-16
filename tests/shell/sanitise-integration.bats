@@ -64,6 +64,11 @@ run_check() { run "$CHECK" --container "$CONTAINER"; }
   [[ "$output" == *"  usermeta session_tokens"* ]]
   [[ "$output" == *"  nonempty wp_post_smtp_logs"* ]]
   [[ "$output" == *"  nonempty wp_zbs_contacts"* ]]
+  [[ "$output" == *"  posttype ap_actor"* ]]
+  [[ "$output" == *"  posttype friend_post_cache"* ]]
+  [[ "$output" == *"  postmeta spay!_email"* ]]
+  [[ "$output" == *"  email wp_posts.post_content"* ]]
+  [[ "$output" == *"  email wp_postmeta.meta_value"* ]]
 }
 
 @test "the check prints table and column names, never the matched values" {
@@ -127,10 +132,25 @@ run_check() { run "$CHECK" --container "$CONTAINER"; }
   [ "$(sql "SELECT option_value FROM wp_options WHERE option_name = 'siteurl'")" = "https://devnel.blog" ]
 }
 
-@test "sanitising leaves posts and pages alone" {
+@test "sanitising leaves posts, pages and revisions alone, and their meta except the listed keys" {
   sanitise
-  [ "$(sql "SELECT COUNT(*) FROM wp_posts")" = 2 ]
+  [ "$(sql "SELECT GROUP_CONCAT(post_type ORDER BY ID) FROM wp_posts")" = "post,page,revision" ]
   [ "$(sql "SELECT post_content FROM wp_posts WHERE ID = 1")" = '<!-- wp:paragraph --><p>Hello there, 3.14 is pi</p><!-- /wp:paragraph -->' ]
+  [ "$(sql "SELECT GROUP_CONCAT(meta_key) FROM wp_postmeta")" = "_thumbnail_id" ]
+}
+
+@test "sanitising: cached remote actors, inbox/outbox and friend items go, with their meta, terms and comments" {
+  sanitise
+  [ "$(sql "SELECT COUNT(*) FROM wp_posts WHERE post_type IN ('ap_actor','ap_inbox','ap_outbox','friend_post_cache')")" = 0 ]
+  [ "$(sql "SELECT COUNT(*) FROM wp_postmeta WHERE post_id IN (3,4,5)")" = 0 ]
+  [ "$(sql "SELECT GROUP_CONCAT(object_id) FROM wp_term_relationships")" = "1" ]
+  [ "$(sql "SELECT COUNT(*) FROM wp_comments WHERE comment_post_ID = 3")" = 0 ]
+  [ "$(sql "SELECT COUNT(*) FROM wp_commentmeta WHERE comment_id = 3")" = 0 ]
+}
+
+@test "sanitising: email addresses left in post text are replaced by redacted@example.test" {
+  sanitise
+  [ "$(sql "SELECT post_content FROM wp_posts WHERE ID = 6")" = "Old draft: write to redacted@example.test, or redacted@example.test" ]
 }
 
 # --- one violation at a time, starting from a sanitised database --------------------------------
@@ -218,8 +238,19 @@ expect_only() {
 
 @test "detects a listed usermeta key that is still present" {
   sanitise
-  sql "INSERT INTO wp_usermeta (user_id, meta_key, meta_value) VALUES (1, 'session_tokens', 'x')"
-  expect_only "usermeta session_tokens"
+  sql "INSERT INTO wp_usermeta (user_id, meta_key, meta_value) VALUES (1, 'jetpack_account_protection_recent_password_hashes', 'x')"
+  expect_only "usermeta jetpack_account_protection_recent_password_hashes"
+  # a key that matches only a pattern
+  sql "DELETE FROM wp_usermeta WHERE meta_key LIKE 'jetpack%'; INSERT INTO wp_usermeta (user_id, meta_key, meta_value) VALUES (1, 'my_api_secret_thing', 'x')"
+  expect_only "usermeta %secret%"
+}
+
+@test "detects a leftover cached post type and a leftover listed postmeta key" {
+  sanitise
+  sql "INSERT INTO wp_posts (post_title, post_content, post_status, post_type) VALUES ('c', 'c', 'publish', 'ap_actor')"
+  expect_only "posttype ap_actor"
+  sql "DELETE FROM wp_posts WHERE post_type = 'ap_actor'; INSERT INTO wp_postmeta (post_id, meta_key, meta_value) VALUES (1, '_g_feedback_shortcode_zzz', 'x')"
+  expect_only "postmeta !_g!_feedback!_shortcode%"
 }
 
 @test "detects a non-empty truncated table, including a wp_zbs_ table created later" {

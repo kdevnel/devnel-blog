@@ -3,7 +3,8 @@
 #   - an email-shaped string that is not an @example.test address, in any text column
 #   - an IPv4/IPv6 address in the comments or commentmeta tables
 #   - a "-----BEGIN" (PEM) block in any text column
-#   - an option or usermeta key from the sanitisation list (scripts/sanitise/*.txt)
+#   - an option, usermeta key, postmeta key or post type from the sanitisation lists
+#     (scripts/sanitise/*.txt)
 #   - a non-empty table from scripts/sanitise/truncate-tables.txt
 # It prints table and column names (and list entries), never the matched values.
 #
@@ -61,17 +62,17 @@ select_where() { add "SELECT '$1' FROM \`$2\` WHERE $3 LIMIT 1"; }
 
 while IFS=$'\t' read -r table column; do
   [[ -n "$table" ]] || continue
-  select_where "email $table.$column" "$table" "\`$column\` REGEXP '$SAN_EMAIL_RE'"
+  select_where "email $table.$column" "$table" "$(san_email_cond "\`$column\`")"
   select_where "pem $table.$column" "$table" "\`$column\` LIKE '%-----BEGIN%'"
   if [[ "$table" == "${p}comments" || "$table" == "${p}commentmeta" ]]; then
-    select_where "ip $table.$column" "$table" "\`$column\` REGEXP '$SAN_IPV4_RE'"
+    select_where "ip $table.$column" "$table" "$(san_ipv4_cond "\`$column\`")"
   fi
 done <<<"$cols"
 
 for spec in "comments comment_author_IP" "commentmeta meta_value"; do
   read -r short column <<<"$spec"
   if has_col "${p}$short" "$column"; then
-    select_where "ip ${p}$short.$column" "${p}$short" "\`$column\` REGEXP '$SAN_IPV6_RE'"
+    select_where "ip ${p}$short.$column" "${p}$short" "$(san_ipv6_cond "\`$column\`")"
   fi
 done
 
@@ -85,7 +86,22 @@ if has_col "${p}usermeta" meta_key; then
   done < <(san_entries "$SAN_DIR/usermeta-delete.txt")
 fi
 
-tables="$(san_tables_like "$target" "$SAN_DIR/truncate-tables.txt")"
+if has_col "${p}posts" post_type; then
+  while IFS= read -r entry; do
+    select_where "posttype $entry" "${p}posts" "$(san_cond post_type "$entry")"
+  done < <(san_entries "$SAN_DIR/posts-delete-types.txt")
+fi
+
+if has_col "${p}postmeta" meta_key; then
+  while IFS= read -r entry; do
+    select_where "postmeta $entry" "${p}postmeta" "$(san_cond meta_key "$entry")"
+  done < <(san_entries "$SAN_DIR/postmeta-delete.txt")
+fi
+
+tables="$(san_tables_like "$target" "$SAN_DIR/truncate-tables.txt")" || {
+  san_err "could not list the tables to check"
+  exit 2
+}
 while IFS= read -r table; do
   [[ -n "$table" ]] || continue
   add "SELECT 'nonempty $table' FROM \`$table\` LIMIT 1"

@@ -1,0 +1,5 @@
+# wp_postmeta rows removed by the sanitiser, and checked absent by check-sanitised.sh. Same format as
+# options-delete.txt (matched against meta_key). These hold the recipient address of contact forms
+# and payment buttons (Jetpack), usually as serialised data, so they are deleted, not rewritten.
+!_g!_feedback!_shortcode%
+spay!_email

@@ -1,0 +1,12 @@
+# Post types removed completely by the sanitiser (the posts, their meta, term relationships,
+# comments and comment meta), and checked absent by check-sanitised.sh. Same format as
+# options-delete.txt (matched against post_type).
+#
+# ActivityPub keeps a cached copy of every remote actor, inbox and outbox item (tens of thousands
+# of rows on a blog with followers: third-party profiles, bios with email addresses, public keys).
+# Friends keeps cached copies of its friends' feed items. None of it is this blog's content and
+# it is all re-fetched on demand.
+ap_actor
+ap_inbox
+ap_outbox
+friend_post_cache
